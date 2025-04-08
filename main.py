@@ -36,4 +36,3 @@ async def startup():
 if __name__ == "__main__":
 
     uvicorn.run(app, host=uvicorn_host, port=8000)
-   
