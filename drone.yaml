@@ -1,0 +1,34 @@
+#TODO: Testing
+
+kind: pipeline
+type: exec
+name: serj-back_delivery
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  branch:
+    - develop #TODO: When merging to main needs to be replaced (bad situation). Maybe make .env?
+  event:
+    - push
+    - merge
+
+clone:
+  disable: true
+
+steps:
+  - name: Pull the repository
+    commands:
+      - cd /root/serj/serj-back
+      - git pull --rebase
+  
+  - name: Restart compose with rebuilding backend service 
+    commands:
+      - cd /root/serj
+      - docker compose up -d --build backend
+
+  - name: Remove unused images
+    commands:
+      - docker image prune -f
