@@ -12,7 +12,7 @@ app = FastAPI()
 
 
 app.include_router(bookings_router, prefix="/api")
-app.include_router(login_router, prefix="/api")
+app.include_router(login_router)
 
 
 @app.get("/")

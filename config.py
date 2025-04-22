@@ -14,7 +14,9 @@ postgres_db = os.getenv("POSTGRES_DB")
 telegram_token = os.getenv("BOT_TOKEN")
 telegram_login = os.getenv("TELEGRAM_LOGIN")
 jwt_secret = os.getenv("JWT_SECRET")
-
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 120
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 def connect_queue():
 
