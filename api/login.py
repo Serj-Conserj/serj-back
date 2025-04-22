@@ -9,8 +9,8 @@ from database.models import Member
 from api.utils.auth_tools import create_tokens, decode_token, get_current_member
 
 router = APIRouter(
-    prefix="/api/member",
-    tags=["member"],
+    prefix="/api",
+    # tags=["member"],
 )
 
 class RegisterRequest(BaseModel):
@@ -31,7 +31,7 @@ class TelegramAuth(BaseModel):
 class RefreshRequest(BaseModel):
     refresh: str
 
-@router.post("", response_model=dict)
+@router.post("/member", response_model=dict)
 async def login_via_telegram(
     data: TelegramAuth,
     db: AsyncSession = Depends(get_db),
