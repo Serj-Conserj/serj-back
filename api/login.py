@@ -19,21 +19,36 @@ class RegisterRequest(BaseModel):
     first_name: Optional[str] = None
     phone: Optional[str] = None
 
+class TelegramAuth(BaseModel):
+    id: int
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    photo_url: Optional[str] = None
+    auth_date: int
+    hash: str
+
 class RefreshRequest(BaseModel):
     refresh: str
 
 @router.post("", response_model=dict)
-async def register(
-    req: RegisterRequest,
+async def login_via_telegram(
+    data: TelegramAuth,
     db: AsyncSession = Depends(get_db),
 ):
-    q = await db.execute(select(Member).filter_by(telegram_id=req.telegram_id))
+    # TODO: проверка data.hash по инструкции Telegram
+    q = await db.execute(select(Member).filter_by(telegram_id=data.id))
     user = q.scalars().first()
     if not user:
-        user = Member(**req.dict())
+        user = Member(
+            telegram_id=data.id,
+            username=data.username,
+            first_name=data.first_name,
+        )
         db.add(user)
         await db.commit()
         await db.refresh(user)
+
     return create_tokens(user.id, user.telegram_id)
 
 @router.post("/refresh", response_model=dict)

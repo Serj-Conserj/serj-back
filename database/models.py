@@ -27,26 +27,6 @@ class Member(Base):
     is_admin = Column(Boolean, default=False)
     is_superuser = Column(Boolean, default=False)
 
-# class User(Base):
-#     __tablename__ = "users"
-
-#     # TODO change when bot will normally exist
-#     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-#     first_name = Column(String(64))
-#     last_name = Column(String(64))
-#     username = Column(String(64))
-#     telegram_id = Column(Integer, unique=True, nullable=False)  # пока называется как id
-#     phone = Column(String(20))  # понять как получать
-
-#     password = Column(String(128))  # это что за приколы
-
-#     is_active = Column(Boolean, default=True)
-#     is_admin = Column(Boolean, default=False)
-#     is_superuser = Column(Boolean, default=False)
-
-#     last_login = Column(DateTime, nullable=True)
-
-
 # For storing Bookings
 class Booking(Base):
     __tablename__ = "bookings"
