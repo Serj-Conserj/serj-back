@@ -42,7 +42,7 @@ class BookingCreate(BaseModel):
     confirmed: Optional[bool] = None
 
 
-@router.post("/bookings/")
+@router.post("/bookings")
 async def create_booking(booking: BookingCreate, db: AsyncSession = Depends(get_db)):
     try:
         result = await db.execute(select(Place).where(Place.id == booking.place_id))
