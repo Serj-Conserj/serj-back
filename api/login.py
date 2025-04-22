@@ -247,11 +247,12 @@ def set_cookies():
     pass
 
 
-@router.get("/login", name="login")
+@router.get("/member", name="login")
 async def login(
     request: Request,
     query_params: TelegramAuth = Depends(TelegramAuth),
 ):
+    print("Raw Telegram auth data:", query_params.model_dump())
     login_widget = TelegramLoginWidget(
         telegram_login=telegram_login,
         size=Size.LARGE,
