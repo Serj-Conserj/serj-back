@@ -32,7 +32,7 @@ class Booking(Base):
     __tablename__ = "bookings"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("members.id"))
     place_id = Column(UUID(as_uuid=True), ForeignKey("places.id"))
     booking_date = Column(DateTime)
     recording_date = Column(DateTime, server_default=func.now())
@@ -40,7 +40,7 @@ class Booking(Base):
     special_requests = Column(String)
     confirmed = Column(Boolean, default=False)
 
-    user = relationship("User")
+    member = relationship("Member")
     place = relationship("Place")
 
 
