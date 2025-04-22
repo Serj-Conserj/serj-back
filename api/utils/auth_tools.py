@@ -19,6 +19,7 @@ bearer_scheme = HTTPBearer()
 
 def create_tokens(member_id: int, telegram_id: int) -> Dict[str, str]:
     now = datetime.utcnow()
+    member_id = str(member_id)
     access_payload = {
         "id": member_id,
         "telegram_id": telegram_id,
