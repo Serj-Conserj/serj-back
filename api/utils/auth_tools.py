@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.database import get_db
 from database.models import Member
 from config import (
-    jwt_secret,
+    JWT_SECRET_KEY,
     JWT_ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
     REFRESH_TOKEN_EXPIRE_DAYS,
