@@ -19,7 +19,7 @@ from database.database import Base
 class Member(Base):
     __tablename__ = "members"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     telegram_id = Column(Integer, unique=True, index=True, nullable=False)
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
