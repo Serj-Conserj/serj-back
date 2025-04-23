@@ -98,11 +98,15 @@ class MemberResponse(BaseModel):
     phone: Optional[str]
     is_admin: bool
     is_superuser: bool
+    class Config:
+        from_attributes = True
 
 class PlaceResponse(BaseModel):
     id: uuid.UUID
     name: str
     available_online: bool
+    class Config:
+        from_attributes = True
 
 class BookingResponse(BaseModel):
     id: uuid.UUID
@@ -120,6 +124,7 @@ class BookingResponse(BaseModel):
         json_encoders = {
             uuid.UUID: lambda x: str(x)
         }
+        from_attributes = True
 
 # GET все бронирования по member
 @router.get("/bookings")
