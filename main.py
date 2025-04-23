@@ -12,7 +12,7 @@ from config import uvicorn_host
 
 app = FastAPI()
 
-app.include_router(place_router, prefix="/api")
+app.include_router(places_router, prefix="/api")
 app.include_router(bookings_router, prefix="/api")
 app.include_router(login_router, prefix="/api")
 
