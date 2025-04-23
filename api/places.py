@@ -3,7 +3,7 @@ from typing import List
 
 router = APIRouter()
 
-@app.get("/places")
+@router.get("/places")
 def get_places():
     return [
         {
