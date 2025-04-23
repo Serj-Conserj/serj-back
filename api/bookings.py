@@ -42,6 +42,9 @@ class BookingCreate(BaseModel):
     booking_date: datetime
     num_of_people: int
     special_requests: Optional[str] = None
+    
+    class Config:
+        from_attributes = True 
 
 @router.post("/bookings")
 async def create_booking(
