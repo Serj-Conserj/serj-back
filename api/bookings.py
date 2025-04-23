@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Union
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 from database.database import get_db, AsyncSession
@@ -38,7 +38,7 @@ def put_into_queue(booking_id, available_online):
 
 
 class BookingCreate(BaseModel):
-    place_id: UUID
+    place_id: Union[str, UUID]
     booking_date: datetime
     num_of_people: int
     special_requests: Optional[str] = None

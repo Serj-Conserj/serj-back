@@ -7,7 +7,7 @@ router = APIRouter()
 def get_places():
     return [
         {
-            "id": uuid.uuid4(),
+            "id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
             "name": "Пельменная №1",
             "service_type": "Ресторан",
             "metro": [{"id": 1, "name": "Пушкинская"}],
