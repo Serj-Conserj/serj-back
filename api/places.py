@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from typing import List
-
+import uuid
 router = APIRouter()
 
 @router.get("/places")
