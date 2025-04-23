@@ -8,10 +8,7 @@ from database.database import get_db
 from database.models import Member
 from api.utils.auth_tools import create_tokens, decode_token, get_current_member
 
-router = APIRouter(
-    prefix="/api",
-    # tags=["member"],
-)
+router = APIRouter()
 
 class RegisterRequest(BaseModel):
     telegram_id: int

@@ -1,18 +1,20 @@
+import os
 import platform
 import uvicorn
 from fastapi import FastAPI
+
 from database.database import engine, Base
-import os
 from api.bookings import router as bookings_router
+from api.places import router as places_router
 from sqlalchemy import text
 from api.login import router as login_router
 from config import uvicorn_host
 
 app = FastAPI()
 
-
+app.include_router(place_router, prefix="/api")
 app.include_router(bookings_router, prefix="/api")
-app.include_router(login_router)
+app.include_router(login_router, prefix="/api")
 
 
 @app.get("/")
