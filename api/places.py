@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import APIRouter
 from typing import List
 
-app = FastAPI()
+router = APIRouter()
 
 @app.get("/places")
 def get_places():
