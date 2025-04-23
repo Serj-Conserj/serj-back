@@ -21,8 +21,8 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 def connect_queue():
 
     connection_params = pika.ConnectionParameters(
-        host=os.getenv("HOST_QUEUE"),
-        port=os.getenv("PORT_QUEUE"),
+        host=os.getenv("RABBITMQ_HOST"),
+        port=5672,
         virtual_host="/",
         credentials=pika.PlainCredentials(
             username=os.getenv("USERNAME_QUEUE"),
