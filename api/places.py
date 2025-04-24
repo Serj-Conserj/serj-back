@@ -1,6 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, FastAPI, Depends, HTTPException
 from typing import List
+from sqlalchemy.orm import Session
+from . import models, schemas, database
 import uuid
+
+app = FastAPI()
 router = APIRouter()
 
 @router.get("/places")
