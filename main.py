@@ -9,7 +9,7 @@ from api.places import router as places_router
 from sqlalchemy import text
 from api.login import router as login_router
 from config import uvicorn_host
-
+from database.models import *
 app = FastAPI()
 
 app.include_router(places_router, prefix="/api")
