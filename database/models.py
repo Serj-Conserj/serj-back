@@ -52,14 +52,14 @@ class Booking(Base):
 #Associative table for restraunts:
 restaurant_cuisine = Table(
     'restaurant_cuisine', Base.metadata,
-    Column('restaurant_id', Integer, ForeignKey('restaurants.id')),
+    Column('restaurant_id', UUID(as_uuid=True), ForeignKey('places.id')),
     Column('cuisine_id', Integer, ForeignKey('cuisines.id'))
 )
 
 #Associative table for metro stations:
 restaurant_metro = Table(
     'restaurant_metro', Base.metadata,
-    Column('restaurant_id', Integer, ForeignKey('restaurants.id')),
+    Column('restaurant_id', UUID(as_uuid=True), ForeignKey('places.id')),
     Column('metro_id', Integer, ForeignKey('metro_stations.id'))
 )
 
@@ -69,7 +69,7 @@ class Cuisine(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
     
-    restaurants = relationship("Restaurant", secondary=restaurant_cuisine, back_populates="cuisines")
+    places = relationship("Place", secondary=restaurant_cuisine, back_populates="cuisines")
 
 class MetroStation(Base):
     __tablename__ = 'metro_stations'
@@ -77,13 +77,13 @@ class MetroStation(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
     
-    restaurants = relationship("Restaurant", secondary=restaurant_metro, back_populates="metro_stations")
+    places = relationship("Place", secondary=restaurant_metro, back_populates="metro_stations")
 
-class Restaurant(Base):
-    __tablename__ = 'restaurants'
+class Place(Base):
+    __tablename__ = 'places'
     
-    id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(String(255), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
     alternate_name = Column(String(255))
     address = Column(String(255))
     goo_rating = Column(Float)
@@ -93,14 +93,5 @@ class Restaurant(Base):
         Boolean, default=False
     )
     
-    cuisines = relationship("Cuisine", secondary=restaurant_cuisine, back_populates="restaurants")
-    metro_stations = relationship("MetroStation", secondary=restaurant_metro, back_populates="restaurants")
-
-# class Place(Base):
-#     __tablename__ = "places"
-
-#     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-#     name = Column(String(200), unique=True)
-#     available_online = Column(
-#         Boolean, default=False
-#     )  # нужно сохранить - юзаю для очередей
+    cuisines = relationship("Cuisine", secondary=restaurant_cuisine, back_populates="places")
+    metro_stations = relationship("MetroStation", secondary=restaurant_metro, back_populates="places")
