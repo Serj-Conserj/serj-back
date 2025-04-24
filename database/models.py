@@ -83,7 +83,7 @@ class Place(Base):
     __tablename__ = 'restaurants'
     
     id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
     alternate_name = Column(String(255))
     address = Column(String(255))
     goo_rating = Column(Float)
@@ -95,12 +95,3 @@ class Place(Base):
     
     cuisines = relationship("Cuisine", secondary=restaurant_cuisine, back_populates="restaurants")
     metro_stations = relationship("MetroStation", secondary=restaurant_metro, back_populates="restaurants")
-
-# class Place(Base):
-#     __tablename__ = "places"
-
-#     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-#     name = Column(String(200), unique=True)
-#     available_online = Column(
-#         Boolean, default=False
-#     )  # нужно сохранить - юзаю для очередей
