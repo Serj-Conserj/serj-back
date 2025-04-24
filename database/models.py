@@ -69,7 +69,7 @@ class Cuisine(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
     
-    restaurants = relationship("Restaurant", secondary=restaurant_cuisine, back_populates="cuisines")
+    restaurants = relationship("Place", secondary=restaurant_cuisine, back_populates="cuisines")
 
 class MetroStation(Base):
     __tablename__ = 'metro_stations'
@@ -77,9 +77,9 @@ class MetroStation(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
     
-    restaurants = relationship("Restaurant", secondary=restaurant_metro, back_populates="metro_stations")
+    restaurants = relationship("Place", secondary=restaurant_metro, back_populates="metro_stations")
 
-class Restaurant(Base):
+class Place(Base):
     __tablename__ = 'restaurants'
     
     id = Column(Integer, primary_key=True, index=True)
