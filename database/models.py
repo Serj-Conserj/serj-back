@@ -16,8 +16,6 @@ from sqlalchemy.ext.declarative import declarative_base
 import uuid
 from database.database import Base
 
-Base = declarative_base()
-
 # For storing Users
 class Member(Base):
     __tablename__ = "members"
@@ -53,20 +51,20 @@ class Booking(Base):
 restaurant_cuisine = Table(
     'restaurant_cuisine', Base.metadata,
     Column('restaurant_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('cuisine_id', Integer, ForeignKey('cuisines.id'))
+    Column('cuisine_id', UUID(as_uuid=True), ForeignKey('cuisines.id'))
 )
 
 #Associative table for metro stations:
 restaurant_metro = Table(
     'restaurant_metro', Base.metadata,
     Column('restaurant_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('metro_id', Integer, ForeignKey('metro_stations.id'))
+    Column('metro_id', UUID(as_uuid=True), ForeignKey('metro_stations.id'))
 )
 
 class Cuisine(Base):
     __tablename__ = 'cuisines'
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(50), unique=True, nullable=False)
     
     places = relationship("Place", secondary=restaurant_cuisine, back_populates="cuisines")
@@ -74,7 +72,7 @@ class Cuisine(Base):
 class MetroStation(Base):
     __tablename__ = 'metro_stations'
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(50), unique=True, nullable=False)
     
     places = relationship("Place", secondary=restaurant_metro, back_populates="metro_stations")
@@ -82,7 +80,7 @@ class MetroStation(Base):
 class Place(Base):
     __tablename__ = 'places'
     
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     alternate_name = Column(String(255))
     address = Column(String(255))
