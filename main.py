@@ -10,11 +10,17 @@ from sqlalchemy import text
 from api.login import router as login_router
 from config import uvicorn_host
 from database.models import *
-app = FastAPI()
+from api import places
+app = FastAPI(
+    title="Restaurant Booking API",
+    description="API для управления ресторанами и бронированиями",
+    version="1.0.0"
+)
 
 app.include_router(places_router, prefix="/api")
 app.include_router(bookings_router, prefix="/api")
 app.include_router(login_router, prefix="/api")
+app.include_router(places.router)
 
 
 @app.get("/")
