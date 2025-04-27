@@ -1,72 +1,3 @@
-# import json
-# from sqlalchemy import create_engine
-# from sqlalchemy.orm import sessionmaker
-# from database.models import Base, Place, Cuisine, MetroStation
-
-# # 1. Подключение к БД
-# engine = create_engine("postgresql://postgres:123@localhost/main_db")
-# Session = sessionmaker(bind=engine)
-# db = Session()
-
-# # 2. Создание таблиц (если не созданы через миграции)
-# Base.metadata.create_all(bind=engine)
-
-# # 3. Загрузка данных
-# def load_data(json_file):
-#     with open(json_file, 'r', encoding='utf-8') as f:
-#         data = json.load(f)
-    
-#     for item in data:
-#         # Создание ресторана
-#         restaurant = Place(
-#             name=item['full_name'],
-#             alternate_name=item.get('alternate_name'),
-#             address=item['address'],
-#             goo_rating=float(item['goo_rating']),
-#             party_booking_name=item['party_booking_name'],
-#             booking_form=item['booking_form']
-#         )
-#         # print(item.get('main_cuisine', []))
-#         if item.get('main_cuisine', []) is None:
-#             continue
-#         # Обработка кухонь
-#         for cuisine_name in item.get('main_cuisine', []):
-#             cuisine = db.query(Cuisine).filter(Cuisine.name == cuisine_name).first()
-#             if not cuisine:
-#                 cuisine = Cuisine(name=cuisine_name)
-#                 db.add(cuisine)
-#                 db.commit()  # Фиксируем для получения ID
-#             restaurant.cuisines.append(cuisine)
-        
-
-#         if item.get('close_metro', []) is None:
-#             continue
-    
-#         # Обработка метро
-#         for metro_name in item.get('close_metro', []):
-#             metro = db.query(MetroStation).filter(MetroStation.name == metro_name).first()
-#             if not metro:
-#                 metro = MetroStation(name=metro_name)
-#                 db.add(metro)
-#                 db.commit()  # Фиксируем для получения ID
-#             restaurant.metro_stations.append(metro)
-
-     
-            
-#         db.add(restaurant)
-    
-#     try:
-#         db.commit()
-#     except Exception as e:
-#         db.rollback()
-#         print(f"Ошибка: {e}")
-#     finally:
-#         db.close()
-
-# if __name__ == "__main__":
-#     load_data('restaurant_data_leclick_1.json')
-
-
 import json
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -76,7 +7,7 @@ import os
 import uuid
 from tqdm import tqdm
 
-load_dotenv()  # Загрузка переменных из .env
+load_dotenv()
 
 SQLALCHEMY_DATABASE_URL = (
     f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"

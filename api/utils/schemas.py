@@ -2,25 +2,30 @@ from pydantic import BaseModel
 from typing import List, Optional
 from uuid import UUID
 
-class CuisineBase(BaseModel):
+
+class CuisineBaseSchema(BaseModel):
     name: str
 
-class Cuisine(CuisineBase):
-    id: UUID
-    
-    class Config:
-        orm_mode = True
 
-class MetroStationBase(BaseModel):
+class CuisineSchema(CuisineBaseSchema):
+    id: UUID
+
+    class Config:
+        from_attributes = True
+
+
+class MetroStationBaseSchema(BaseModel):
     name: str
 
-class MetroStation(MetroStationBase):
-    id: UUID
-    
-    class Config:
-        orm_mode = True
 
-class PlaceBase(BaseModel):
+class MetroStationSchema(MetroStationBaseSchema):
+    id: UUID
+
+    class Config:
+        from_attributes = True
+
+
+class PlaceBaseSchema(BaseModel):
     name: str
     alternate_name: Optional[str] = None
     address: Optional[str] = None
@@ -28,13 +33,11 @@ class PlaceBase(BaseModel):
     party_booking_name: Optional[str] = None
     booking_form: Optional[str] = None
 
-class PlaceCreate(PlaceBase):
-    pass
 
-class Place(PlaceBase):
+class PlaceSchema(PlaceBaseSchema):
     id: UUID
-    cuisines: List[Cuisine] = []
-    metro_stations: List[MetroStation] = []
-    
+    cuisines: List[CuisineSchema] = []
+    metro_stations: List[MetroStationSchema] = []
+
     class Config:
-        orm_mode = True
+        from_attributes = True
