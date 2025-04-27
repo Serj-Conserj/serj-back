@@ -14,43 +14,47 @@ SQLALCHEMY_DATABASE_URL = (
     f"@{os.getenv('POSTGRES_HOST')}:{os.getenv('PG_PORT')}/{os.getenv('POSTGRES_DB')}"
 )
 
+
 def import_places(json_path: str, db_uri: str):
     engine = create_engine(db_uri)
     Session = sessionmaker(bind=engine, autoflush=False)
     session = Session()
     Base.metadata.create_all(bind=engine)
     try:
-        with open(json_path, 'r', encoding='utf-8', errors='replace') as f:
+        with open(json_path, "r", encoding="utf-8", errors="replace") as f:
             places_data = json.load(f)
 
         for idx, place_data in enumerate(places_data):
-            if 'full_name' not in place_data or not place_data['full_name']:
+            if "full_name" not in place_data or not place_data["full_name"]:
                 print(f"⚠️ Ошибка в записи #{idx}: Отсутствует full_name")
                 print(json.dumps(place_data, indent=2, ensure_ascii=False))
                 continue
-        
+
         # Проверка структуры данных
         if not isinstance(places_data, list):
             raise ValueError("Invalid JSON format: expected list of objects")
 
         BATCH_SIZE = 10
         total = len(places_data)
-        
+
         with tqdm(total=total, desc="Processing places") as pbar:
             for i in range(0, total, BATCH_SIZE):
-                batch = places_data[i:i+BATCH_SIZE]
-                
+                batch = places_data[i : i + BATCH_SIZE]
+
                 # Проверка и нормализация данных
                 validated_batch = []
                 for item in batch:
-                    if not all(key in item for key in ['full_name', 'main_cuisine', 'close_metro']):
+                    if not all(
+                        key in item
+                        for key in ["full_name", "main_cuisine", "close_metro"]
+                    ):
                         print(f"Skipping invalid record: {item.get('full_name')}")
                         continue
-                    
+
                     # Нормализация списков
-                    item['main_cuisine'] = item['main_cuisine'] or []
-                    item['close_metro'] = item['close_metro'] or []
-                    
+                    item["main_cuisine"] = item["main_cuisine"] or []
+                    item["close_metro"] = item["close_metro"] or []
+
                     validated_batch.append(item)
 
                 # Пропускаем пустые батчи
@@ -59,8 +63,8 @@ def import_places(json_path: str, db_uri: str):
                     continue
 
                 # Сбор уникальных значений
-                all_cuisines = {c for p in validated_batch for c in p['main_cuisine']}
-                all_metros = {m for p in validated_batch for m in p['close_metro']}
+                all_cuisines = {c for p in validated_batch for c in p["main_cuisine"]}
+                all_metros = {m for p in validated_batch for m in p["close_metro"]}
 
                 # Создаем кухни
                 cuisines_map = {}
@@ -97,26 +101,37 @@ def import_places(json_path: str, db_uri: str):
                     try:
                         place = Place(
                             id=uuid.uuid4(),
-                            name=str(place_data.get('full_name', '')).strip() or '[Без названия]',
-                            alternate_name=place_data.get('alternate_name'),
-                            address=place_data.get('address', ''),
-                            goo_rating=float(place_data.get('goo_rating', 0)),
-                            party_booking_name=place_data.get('party_booking_name', ''),
-                            booking_form=place_data.get('booking_form', ''),
-                            available_online=False
+                            name=str(place_data.get("full_name", "")).strip()
+                            or "[Без названия]",
+                            alternate_name=place_data.get("alternate_name"),
+                            address=place_data.get("address", ""),
+                            goo_rating=float(place_data.get("goo_rating", 0)),
+                            party_booking_name=place_data.get("party_booking_name", ""),
+                            booking_form=place_data.get("booking_form", ""),
+                            available_online=False,
                         )
                         # session.add(place)
-                        
+
                         # Добавляем связи
-                        place.cuisines = [cuisines_map[c] for c in place_data['main_cuisine'] if c in cuisines_map]
-                        place.metro_stations = [metros_map[m] for m in place_data['close_metro'] if m in metros_map]
-                        success += 1    
+                        place.cuisines = [
+                            cuisines_map[c]
+                            for c in place_data["main_cuisine"]
+                            if c in cuisines_map
+                        ]
+                        place.metro_stations = [
+                            metros_map[m]
+                            for m in place_data["close_metro"]
+                            if m in metros_map
+                        ]
+                        success += 1
                         session.add(place)
                     except Exception as e:
                         errors += 1
                         print(f"🚨 Ошибка в {place_data.get('full_name')}: {str(e)}")
                         session.rollback()
-                        print(f"Error creating place {place_data['full_name']}: {str(e)}")
+                        print(
+                            f"Error creating place {place_data['full_name']}: {str(e)}"
+                        )
                 print(f"Результат: Успешно {success} | Ошибок {errors}")
                 try:
                     session.commit()
@@ -130,8 +145,8 @@ def import_places(json_path: str, db_uri: str):
     finally:
         session.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import_places(
-        json_path='restaurant_data_leclick_1.json',
-        db_uri=SQLALCHEMY_DATABASE_URL
+        json_path="restaurant_data_leclick_1.json", db_uri=SQLALCHEMY_DATABASE_URL
     )

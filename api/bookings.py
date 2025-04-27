@@ -34,23 +34,21 @@ def put_into_queue(booking_id, available_online):
     connection.close()
 
 
-
-
-
 class BookingCreate(BaseModel):
     place_id: Union[str, UUID]
     booking_date: datetime
     num_of_people: int
     special_requests: Optional[str] = None
-    
+
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
 
 @router.post("/bookings")
 async def create_booking(
     booking: BookingCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Member = Depends(get_current_member)
+    current_user: Member = Depends(get_current_member),
 ):
     try:
         # Проверка, существует ли место
@@ -78,10 +76,7 @@ async def create_booking(
 
         return JSONResponse(
             status_code=200,
-            content={
-                "status": "success",
-                "message": "Бронирование успешно создано"
-            }
+            content={"status": "success", "message": "Бронирование успешно создано"},
         )
 
     except Exception as e:
@@ -98,15 +93,19 @@ class MemberResponse(BaseModel):
     phone: Optional[str]
     is_admin: bool
     is_superuser: bool
+
     class Config:
         from_attributes = True
+
 
 class PlaceResponse(BaseModel):
     id: uuid.UUID
     name: str
     available_online: bool
+
     class Config:
         from_attributes = True
+
 
 class BookingResponse(BaseModel):
     id: uuid.UUID
@@ -121,20 +120,18 @@ class BookingResponse(BaseModel):
     place: PlaceResponse
 
     class Config:
-        json_encoders = {
-            uuid.UUID: lambda x: str(x)
-        }
+        json_encoders = {uuid.UUID: lambda x: str(x)}
         from_attributes = True
+
 
 # GET все бронирования по member
 @router.get("/bookings")
 async def get_all_bookings(db: AsyncSession = Depends(get_db)):
     try:
         stmt = select(Booking).options(
-            selectinload(Booking.member),
-            selectinload(Booking.place)
+            selectinload(Booking.member), selectinload(Booking.place)
         )
-        
+
         result = await db.execute(stmt)
         bookings = result.scalars().all()
 
@@ -148,10 +145,7 @@ async def get_all_bookings(db: AsyncSession = Depends(get_db)):
             else:
                 upcoming_bookings.append(serialized)
 
-        return {
-            "upcoming_bookings": upcoming_bookings,
-            "past_bookings": past_bookings
-        }
+        return {"upcoming_bookings": upcoming_bookings, "past_bookings": past_bookings}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

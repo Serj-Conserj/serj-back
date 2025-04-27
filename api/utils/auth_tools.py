@@ -17,6 +17,7 @@ from config import (
 
 bearer_scheme = HTTPBearer()
 
+
 def create_tokens(member_id: int, telegram_id: int) -> Dict[str, str]:
     now = datetime.utcnow()
     member_id = str(member_id)
@@ -36,11 +37,13 @@ def create_tokens(member_id: int, telegram_id: int) -> Dict[str, str]:
     refresh = jwt.encode(refresh_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return {"access": access, "refresh": refresh}
 
+
 def decode_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
     except jwt.PyJWTError:
         return None
+
 
 async def get_current_member(
     creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),

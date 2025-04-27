@@ -10,11 +10,13 @@ from api.utils.auth_tools import create_tokens, decode_token, get_current_member
 
 router = APIRouter()
 
+
 class RegisterRequest(BaseModel):
     telegram_id: int
     username: Optional[str] = None
     first_name: Optional[str] = None
     phone: Optional[str] = None
+
 
 class TelegramAuth(BaseModel):
     id: int
@@ -25,8 +27,10 @@ class TelegramAuth(BaseModel):
     auth_date: int
     hash: str
 
+
 class RefreshRequest(BaseModel):
     refresh: str
+
 
 @router.post("/member", response_model=dict)
 async def login_via_telegram(
@@ -48,6 +52,7 @@ async def login_via_telegram(
 
     return create_tokens(user.id, user.telegram_id)
 
+
 @router.post("/refresh", response_model=dict)
 async def refresh_token(
     req: RefreshRequest,
@@ -60,6 +65,7 @@ async def refresh_token(
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
     return create_tokens(user.id, user.telegram_id)
+
 
 @router.get("/protected")
 async def protected_route(current: Member = Depends(get_current_member)):

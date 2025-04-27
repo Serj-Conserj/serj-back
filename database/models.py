@@ -8,7 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     func,
     Table,
-    create_engine
+    create_engine,
 )
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.dialects.postgresql import UUID
@@ -30,6 +30,7 @@ class Member(Base):
     is_admin = Column(Boolean, default=False)
     is_superuser = Column(Boolean, default=False)
 
+
 # For storing Bookings
 class Booking(Base):
     __tablename__ = "bookings"
@@ -49,39 +50,48 @@ class Booking(Base):
 
 # Main table with places (associative tables included)
 
-#Associative table for restraunts:
+# Associative table for restraunts:
 restaurant_cuisine = Table(
-    'restaurant_cuisine', Base.metadata,
-    Column('restaurant_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('cuisine_id', Integer, ForeignKey('cuisines.id'))
+    "restaurant_cuisine",
+    Base.metadata,
+    Column("restaurant_id", UUID(as_uuid=True), ForeignKey("places.id")),
+    Column("cuisine_id", Integer, ForeignKey("cuisines.id")),
 )
 
-#Associative table for metro stations:
+# Associative table for metro stations:
 restaurant_metro = Table(
-    'restaurant_metro', Base.metadata,
-    Column('restaurant_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('metro_id', Integer, ForeignKey('metro_stations.id'))
+    "restaurant_metro",
+    Base.metadata,
+    Column("restaurant_id", UUID(as_uuid=True), ForeignKey("places.id")),
+    Column("metro_id", Integer, ForeignKey("metro_stations.id")),
 )
+
 
 class Cuisine(Base):
-    __tablename__ = 'cuisines'
-    
+    __tablename__ = "cuisines"
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
-    
-    places = relationship("Place", secondary=restaurant_cuisine, back_populates="cuisines")
+
+    places = relationship(
+        "Place", secondary=restaurant_cuisine, back_populates="cuisines"
+    )
+
 
 class MetroStation(Base):
-    __tablename__ = 'metro_stations'
-    
+    __tablename__ = "metro_stations"
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
-    
-    places = relationship("Place", secondary=restaurant_metro, back_populates="metro_stations")
+
+    places = relationship(
+        "Place", secondary=restaurant_metro, back_populates="metro_stations"
+    )
+
 
 class Place(Base):
-    __tablename__ = 'places'
-    
+    __tablename__ = "places"
+
     id = Column(UUID(as_uuid=True), primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     alternate_name = Column(String(255))
@@ -89,9 +99,11 @@ class Place(Base):
     goo_rating = Column(Float)
     party_booking_name = Column(String(512))
     booking_form = Column(String(512))
-    available_online = Column(
-        Boolean, default=False
+    available_online = Column(Boolean, default=False)
+
+    cuisines = relationship(
+        "Cuisine", secondary=restaurant_cuisine, back_populates="places"
     )
-    
-    cuisines = relationship("Cuisine", secondary=restaurant_cuisine, back_populates="places")
-    metro_stations = relationship("MetroStation", secondary=restaurant_metro, back_populates="places")
+    metro_stations = relationship(
+        "MetroStation", secondary=restaurant_metro, back_populates="places"
+    )
