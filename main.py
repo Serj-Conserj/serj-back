@@ -10,23 +10,18 @@ from sqlalchemy import text
 from api.login import router as login_router
 from config import uvicorn_host
 from database.models import *
-from api import places
-app = FastAPI(
-    title="Restaurant Booking API",
-    description="API для управления ресторанами и бронированиями",
-    version="1.0.0"
-)
+
+app = FastAPI()
+
 
 app.include_router(places_router, prefix="/api")
 app.include_router(bookings_router, prefix="/api")
 app.include_router(login_router, prefix="/api")
-app.include_router(places.router)
 
 
 @app.get("/")
 async def root():
     return {"message": "Hello, World!"}
-    # return RedirectResponse(url=request.url_for('login'))
 
 
 @app.on_event("startup")
@@ -42,5 +37,4 @@ async def startup():
 
 
 if __name__ == "__main__":
-
     uvicorn.run(app, host=uvicorn_host, port=8000)
