@@ -55,7 +55,7 @@ restaurant_cuisine = Table(
     "restaurant_cuisine",
     Base.metadata,
     Column("restaurant_id", UUID(as_uuid=True), ForeignKey("places.id")),
-    Column("cuisine_id", Integer, ForeignKey("cuisines.id")),
+    Column("cuisine_id", UUID(as_uuid=True), ForeignKey("cuisines.id")),
 )
 
 # Associative table for metro stations:
@@ -63,14 +63,14 @@ restaurant_metro = Table(
     "restaurant_metro",
     Base.metadata,
     Column("restaurant_id", UUID(as_uuid=True), ForeignKey("places.id")),
-    Column("metro_id", Integer, ForeignKey("metro_stations.id")),
+    Column("metro_id", UUID(as_uuid=True), ForeignKey("metro_stations.id")),
 )
 
 
 class Cuisine(Base):
     __tablename__ = "cuisines"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
 
     places = relationship(
@@ -81,7 +81,7 @@ class Cuisine(Base):
 class MetroStation(Base):
     __tablename__ = "metro_stations"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
     name = Column(String(50), unique=True, nullable=False)
 
     places = relationship(

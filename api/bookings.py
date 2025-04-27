@@ -1,37 +1,42 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List, Union
-from sqlalchemy.orm import selectinload
+from typing import Optional, Union, List
+from uuid import UUID
 from datetime import datetime
+import uuid
+
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from database.database import get_db, AsyncSession
 from database.models import Booking, Place, Member
 from api.utils.auth_tools import get_current_member
-from sqlalchemy import select
-import uuid
-import pika
-from config import connect_queue, call_queue, pars_queue
-from uuid import UUID
+
+from config import rabbitmq_url, CALL_QUEUE, PARS_QUEUE
+from aio_pika import connect_robust, Message
+import json
 
 router = APIRouter()
 
+async def put_into_queue(booking_id: UUID, available_online: bool):
+    # 1) подключаемся
+    conn = await connect_robust(rabbitmq_url)
+    channel = await conn.channel()
+    await channel.set_qos(prefetch_count=1)
 
-def put_into_queue(booking_id, available_online):
-    connection_params = connect_queue()
-    connection = pika.BlockingConnection(connection_params)
+    # 2) выбираем нужную очередь
+    queue_name = PARS_QUEUE if available_online else CALL_QUEUE
+    # гарантированно объявляем с тем же durable-флагом, что и потребитель
+    await channel.declare_queue(queue_name, durable=True)
 
-    channel = connection.channel()
-    message = f'{{"booking_id": "{booking_id}"}}'
+    # 3) публикуем
+    body = json.dumps({"booking_id": str(booking_id)})
+    await channel.default_exchange.publish(
+        Message(body.encode(), content_type="application/json"),
+        routing_key=queue_name,
+    )
+    await conn.close()
 
-    # Cheking while our app will call or register online
-    if available_online:
-        channel.queue_declare(queue=pars_queue)
-        channel.basic_publish(exchange="", routing_key=pars_queue, body=message)
-    else:
-        channel.queue_declare(queue=call_queue)
-        channel.basic_publish(exchange="", routing_key=call_queue, body=message)
-
-    connection.close()
 
 
 class BookingCreate(BaseModel):
@@ -50,6 +55,7 @@ async def create_booking(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_member),
 ):
+
     try:
         # Проверка, существует ли место
         result = await db.execute(select(Place).where(Place.id == booking.place_id))
@@ -72,7 +78,7 @@ async def create_booking(
         await db.refresh(db_booking)
 
         # Очередь
-        put_into_queue(db_booking.id, place.available_online)
+        await put_into_queue(db_booking.id, place.available_online)
 
         return JSONResponse(
             status_code=200,
@@ -97,11 +103,27 @@ class MemberResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-class PlaceResponse(BaseModel):
+class MetroStationResponse(BaseModel):
     id: uuid.UUID
     name: str
+
+    class Config:
+        from_attributes = True
+
+class CuisineResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class PlaceResponse(BaseModel):
+    id: UUID
+    name: str
     available_online: bool
+    metro_stations: List[MetroStationResponse] = []
+    cuisines: List[CuisineResponse] = []
 
     class Config:
         from_attributes = True
@@ -129,7 +151,10 @@ class BookingResponse(BaseModel):
 async def get_all_bookings(db: AsyncSession = Depends(get_db)):
     try:
         stmt = select(Booking).options(
-            selectinload(Booking.member), selectinload(Booking.place)
+            selectinload(Booking.member), selectinload(Booking.place).options(
+                selectinload(Place.metro_stations),
+                selectinload(Place.cuisines),
+            )
         )
 
         result = await db.execute(stmt)

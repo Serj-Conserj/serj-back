@@ -51,5 +51,5 @@ async def get_places(
 
     result = await db.execute(stmt)
     places = result.scalars().all()
-    print(places)
+
     return places
