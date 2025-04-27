@@ -18,6 +18,7 @@ import json
 
 router = APIRouter()
 
+
 async def put_into_queue(booking_id: UUID, available_online: bool):
     # 1) подключаемся
     conn = await connect_robust(rabbitmq_url)
@@ -36,7 +37,6 @@ async def put_into_queue(booking_id: UUID, available_online: bool):
         routing_key=queue_name,
     )
     await conn.close()
-
 
 
 class BookingCreate(BaseModel):
@@ -103,12 +103,14 @@ class MemberResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class MetroStationResponse(BaseModel):
     id: uuid.UUID
     name: str
 
     class Config:
         from_attributes = True
+
 
 class CuisineResponse(BaseModel):
     id: uuid.UUID
@@ -151,10 +153,11 @@ class BookingResponse(BaseModel):
 async def get_all_bookings(db: AsyncSession = Depends(get_db)):
     try:
         stmt = select(Booking).options(
-            selectinload(Booking.member), selectinload(Booking.place).options(
+            selectinload(Booking.member),
+            selectinload(Booking.place).options(
                 selectinload(Place.metro_stations),
                 selectinload(Place.cuisines),
-            )
+            ),
         )
 
         result = await db.execute(stmt)
