@@ -36,3 +36,7 @@ PARS_QUEUE = os.getenv("PARS_QUEUE")
 rabbitmq_url = (
     f"amqp://{USERNAME_QUEUE}:{PASSWORD_QUEUE}" f"@{RABBITMQ_HOST}:{RABBITMQ_PORT}/"
 )
+
+# booking states
+booking_success_state = os.getenv("PASSWORD_QUEUE")
+booking_failure_state = os.getenv("PASSWORD_QUEUE")
