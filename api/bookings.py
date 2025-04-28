@@ -177,3 +177,45 @@ async def get_all_bookings(db: AsyncSession = Depends(get_db)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class BookingStatusUpdate(BaseModel):
+    booking_id: UUID
+    status: str  # "booked" or "failed"
+
+    class Config:
+        from_attributes = True
+
+
+@router.post(
+    "/bookings/update_status"
+)  # TODO сделать обращение внутри докера // разрешить только часть хостов
+async def update_booking_status(
+    data: BookingStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await db.execute(select(Booking).where(Booking.id == data.booking_id))
+        booking = result.scalars().first()
+
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+
+        if data.status == "booked":
+            booking.confirmed = True
+        elif data.status == "failed":
+            booking.confirmed = False
+        else:
+            raise HTTPException(status_code=400, detail="Invalid status value")
+
+        await db.commit()
+        await db.refresh(booking)
+
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "message": "Booking status updated"},
+        )
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

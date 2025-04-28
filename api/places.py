@@ -18,36 +18,16 @@ router = APIRouter()
 
 @router.get("/places", response_model=List[PlaceSchema])
 async def get_places(
+    name: Optional[str] = None,
     db: Session = Depends(get_db),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, le=1000),
-    min_rating: Optional[float] = Query(None, ge=0, le=5),
-    cuisine: Optional[str] = None,
-    metro: Optional[str] = None,
-    expand: Optional[List[str]] = Query(None),
 ):
-    stmt = select(PlaceModel)
-
-    # ВСЕГДА грузим связи cuisines и metro_stations через selectinload
-    stmt = stmt.options(
-        selectinload(PlaceModel.cuisines), selectinload(PlaceModel.metro_stations)
+    stmt = select(PlaceModel).options(
+        selectinload(PlaceModel.cuisines),
+        selectinload(PlaceModel.metro_stations),
     )
 
-    # Фильтрация
-    if min_rating is not None:
-        stmt = stmt.where(PlaceModel.goo_rating >= min_rating)
-
-    if cuisine:
-        stmt = stmt.join(PlaceModel.cuisines).where(
-            CuisineModel.name.ilike(f"%{cuisine}%")
-        )
-
-    if metro:
-        stmt = stmt.join(PlaceModel.metro_stations).where(
-            MetroModel.name.ilike(f"%{metro}%")
-        )
-
-    stmt = stmt.offset(skip).limit(limit)
+    if name:
+        stmt = stmt.where(PlaceModel.name.ilike(f"%{name}%"))
 
     result = await db.execute(stmt)
     places = result.scalars().all()

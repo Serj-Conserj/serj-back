@@ -100,6 +100,7 @@ class Place(Base):
     party_booking_name = Column(String(512))
     booking_form = Column(String(512))
     available_online = Column(Boolean, default=False)
+    phone_number = Column(String(50))
 
     cuisines = relationship(
         "Cuisine", secondary=restaurant_cuisine, back_populates="places"
