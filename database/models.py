@@ -1,110 +1,141 @@
-from sqlalchemy import (
-    Column,
-    String,
-    Integer,
-    Float,
-    DateTime,
-    Boolean,
-    ForeignKey,
-    func,
-    Table,
-    create_engine,
-)
-from sqlalchemy.orm import relationship, sessionmaker
+# models.py
+from sqlalchemy import Column, String, Float, JSON, ForeignKey, Table, Integer
+from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
 import uuid
-from database.database import Base
 
 Base = declarative_base()
 
-# For storing Users
-class Member(Base):
-    __tablename__ = "members"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    telegram_id = Column(Integer, unique=True, index=True, nullable=False)
-    username = Column(String(255), nullable=True)
-    first_name = Column(String(255), nullable=True)
-    phone = Column(String(20), nullable=True)
-    is_admin = Column(Boolean, default=False)
-    is_superuser = Column(Boolean, default=False)
-
-
-# For storing Bookings
-class Booking(Base):
-    __tablename__ = "bookings"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("members.id"))
-    place_id = Column(UUID(as_uuid=True), ForeignKey("places.id"))
-    booking_date = Column(DateTime)
-    recording_date = Column(DateTime, server_default=func.now())
-    num_of_people = Column(Integer)
-    special_requests = Column(String)
-    confirmed = Column(Boolean, default=False)
-
-    member = relationship("Member")
-    place = relationship("Place")
-
-
-# Main table with places (associative tables included)
-
-# Associative table for restraunts:
-restaurant_cuisine = Table(
-    "restaurant_cuisine",
-    Base.metadata,
-    Column("restaurant_id", UUID(as_uuid=True), ForeignKey("places.id")),
-    Column("cuisine_id", UUID(as_uuid=True), ForeignKey("cuisines.id")),
+# Таблицы связи многие-ко-многим
+place_alternate_names = Table(
+    'place_alternate_names', Base.metadata,
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
+    Column('alternate_name_id', UUID(as_uuid=True), ForeignKey('alternate_names.id'), postgresql_ondelete="CASCADE")
 )
 
-# Associative table for metro stations:
-restaurant_metro = Table(
-    "restaurant_metro",
-    Base.metadata,
-    Column("restaurant_id", UUID(as_uuid=True), ForeignKey("places.id")),
-    Column("metro_id", UUID(as_uuid=True), ForeignKey("metro_stations.id")),
+place_metro_stations = Table(
+    'place_metro_stations', Base.metadata,
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
+    Column('metro_station_id', UUID(as_uuid=True), ForeignKey('metro_stations.id'), postgresql_ondelete="CASCADE")
 )
 
+place_cuisines = Table(
+    'place_cuisines', Base.metadata,
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
+    Column('cuisine_id', UUID(as_uuid=True), ForeignKey('cuisines.id'), postgresql_ondelete="CASCADE")
+)
 
-class Cuisine(Base):
-    __tablename__ = "cuisines"
+place_features = Table(
+    'place_features', Base.metadata,
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
+    Column('feature_id', UUID(as_uuid=True), ForeignKey('features.id'), postgresql_ondelete="CASCADE")
+)
 
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    name = Column(String(50), unique=True, nullable=False)
+place_visit_purposes = Table(
+    'place_visit_purposes', Base.metadata,
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
+    Column('visit_purpose_id', UUID(as_uuid=True), ForeignKey('visit_purposes.id'), postgresql_ondelete="CASCADE")
+)
 
-    places = relationship(
-        "Place", secondary=restaurant_cuisine, back_populates="cuisines"
-    )
+class Place(AsyncAttrs, Base):
+    __tablename__ = 'places'
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    full_name = Column(String)
+    phone = Column(String)
+    address = Column(String)
+    type = Column(String)
+    average_check = Column(Float)
+    description = Column(String)
+    deposit_rules = Column(String)
+    coordinates_lat = Column(Float)
+    coordinates_lon = Column(Float)
+    source_url = Column(String)
+    source_domain = Column(String)
+    
+    # Relationships
+    alternate_names = relationship("AlternateName", secondary=place_alternate_names, back_populates="places")
+    metro_stations = relationship("MetroStation", secondary=place_metro_stations, back_populates="places")
+    cuisines = relationship("Cuisine", secondary=place_cuisines, back_populates="places")
+    features = relationship("Feature", secondary=place_features, back_populates="places")
+    visit_purposes = relationship("VisitPurpose", secondary=place_visit_purposes, back_populates="places")
+    
+    opening_hours = relationship("OpeningHour", back_populates="place")
+    photos = relationship("Photo", back_populates="place")
+    menu_links = relationship("MenuLink", back_populates="place")
+    booking_links = relationship("BookingLink", back_populates="place")
+    reviews = relationship("Review", back_populates="place")
 
+class AlternateName(AsyncAttrs, Base):
+    __tablename__ = 'alternate_names'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, unique=True)
+    places = relationship("Place", secondary=place_alternate_names, back_populates="alternate_names")
 
-class MetroStation(Base):
-    __tablename__ = "metro_stations"
+class MetroStation(AsyncAttrs, Base):
+    __tablename__ = 'metro_stations'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, unique=True)
+    places = relationship("Place", secondary=place_metro_stations, back_populates="metro_stations")
 
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    name = Column(String(50), unique=True, nullable=False)
+class Cuisine(AsyncAttrs, Base):
+    __tablename__ = 'cuisines'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, unique=True)
+    places = relationship("Place", secondary=place_cuisines, back_populates="cuisines")
 
-    places = relationship(
-        "Place", secondary=restaurant_metro, back_populates="metro_stations"
-    )
+class Feature(AsyncAttrs, Base):
+    __tablename__ = 'features'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, unique=True)
+    places = relationship("Place", secondary=place_features, back_populates="features")
 
+class VisitPurpose(AsyncAttrs, Base):
+    __tablename__ = 'visit_purposes'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, unique=True)
+    places = relationship("Place", secondary=place_visit_purposes, back_populates="visit_purposes")
 
-class Place(Base):
-    __tablename__ = "places"
+class OpeningHour(AsyncAttrs, Base):
+    __tablename__ = 'opening_hours'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    day = Column(String)
+    hours = Column(String)
+    place_id = Column(UUID(as_uuid=True), ForeignKey('places.id'))
+    place = relationship("Place", back_populates="opening_hours")
 
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    alternate_name = Column(String(255))
-    address = Column(String(255))
-    goo_rating = Column(Float)
-    party_booking_name = Column(String(512))
-    booking_form = Column(String(512))
-    available_online = Column(Boolean, default=False)
-    phone_number = Column(String(50))
+class Photo(AsyncAttrs, Base):
+    __tablename__ = 'photos'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    type = Column(String)
+    url = Column(String)
+    place_id = Column(UUID(as_uuid=True), ForeignKey('places.id'))
+    place = relationship("Place", back_populates="photos")
 
-    cuisines = relationship(
-        "Cuisine", secondary=restaurant_cuisine, back_populates="places"
-    )
-    metro_stations = relationship(
-        "MetroStation", secondary=restaurant_metro, back_populates="places"
-    )
+class MenuLink(AsyncAttrs, Base):
+    __tablename__ = 'menu_links'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    type = Column(String)
+    url = Column(String)
+    place_id = Column(UUID(as_uuid=True), ForeignKey('places.id'))
+    place = relationship("Place", back_populates="menu_links")
+
+class BookingLink(AsyncAttrs, Base):
+    __tablename__ = 'booking_links'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    type = Column(String)
+    url = Column(String)
+    place_id = Column(UUID(as_uuid=True), ForeignKey('places.id'))
+    place = relationship("Place", back_populates="booking_links")
+
+class Review(AsyncAttrs, Base):
+    __tablename__ = 'reviews'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    author = Column(String)
+    date = Column(String)
+    rating = Column(Integer)
+    text = Column(String)
+    source = Column(String)
+    place_id = Column(UUID(as_uuid=True), ForeignKey('places.id'))
+    place = relationship("Place", back_populates="reviews")
