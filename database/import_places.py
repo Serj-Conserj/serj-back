@@ -1,152 +1,178 @@
-import json
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from database.models import Base, Place, Cuisine, MetroStation
-from dotenv import load_dotenv
+import sys
 import os
+import asyncio
 import uuid
-from tqdm import tqdm
+import json
+from pathlib import Path
+from contextlib import asynccontextmanager
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select, func
 
-load_dotenv()
+# Добавляем корень проекта в пути поиска модулей
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-SQLALCHEMY_DATABASE_URL = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('POSTGRES_HOST')}:{os.getenv('PG_PORT')}/{os.getenv('POSTGRES_DB')}"
+from models import Base, Place, AlternateName, MetroStation, Cuisine, Feature, VisitPurpose, \
+    OpeningHour, Photo, MenuLink, BookingLink, Review
+from app_config import (
+    postgres_user,
+    postgres_password,
+    postgres_host,
+    postgres_port,
+    postgres_db,
 )
 
-
-def import_places(json_path: str, db_uri: str):
-    engine = create_engine(db_uri)
-    Session = sessionmaker(bind=engine, autoflush=False)
-    session = Session()
-    Base.metadata.create_all(bind=engine)
-    try:
-        with open(json_path, "r", encoding="utf-8", errors="replace") as f:
-            places_data = json.load(f)
-
-        for idx, place_data in enumerate(places_data):
-            if "full_name" not in place_data or not place_data["full_name"]:
-                print(f"⚠️ Ошибка в записи #{idx}: Отсутствует full_name")
-                print(json.dumps(place_data, indent=2, ensure_ascii=False))
-                continue
-
-        # Проверка структуры данных
-        if not isinstance(places_data, list):
-            raise ValueError("Invalid JSON format: expected list of objects")
-
-        BATCH_SIZE = 10
-        total = len(places_data)
-
-        with tqdm(total=total, desc="Processing places") as pbar:
-            for i in range(0, total, BATCH_SIZE):
-                batch = places_data[i : i + BATCH_SIZE]
-
-                # Проверка и нормализация данных
-                validated_batch = []
-                for item in batch:
-                    if not all(
-                        key in item
-                        for key in ["full_name", "main_cuisine", "close_metro"]
-                    ):
-                        print(f"Skipping invalid record: {item.get('full_name')}")
-                        continue
-
-                    # Нормализация списков
-                    item["main_cuisine"] = item["main_cuisine"] or []
-                    item["close_metro"] = item["close_metro"] or []
-
-                    validated_batch.append(item)
-
-                # Пропускаем пустые батчи
-                if not validated_batch:
-                    pbar.update(len(batch))
-                    continue
-
-                # Сбор уникальных значений
-                all_cuisines = {c for p in validated_batch for c in p["main_cuisine"]}
-                all_metros = {m for p in validated_batch for m in p["close_metro"]}
-
-                # Создаем кухни
-                cuisines_map = {}
-                for name in all_cuisines:
-                    if not name:  # Пропускаем пустые значения
-                        continue
-                    cuisine = session.query(Cuisine).filter_by(name=name).first()
-                    if not cuisine:
-                        cuisine = Cuisine(id=uuid.uuid4(), name=name)
-                        session.add(cuisine)
-                    cuisines_map[name] = cuisine
-
-                # Создаем метро
-                metros_map = {}
-                for name in all_metros:
-                    if not name:  # Пропускаем пустые значения
-                        continue
-                    metro = session.query(MetroStation).filter_by(name=name).first()
-                    if not metro:
-                        metro = MetroStation(id=uuid.uuid4(), name=name)
-                        session.add(metro)
-                    metros_map[name] = metro
-
-                try:
-                    session.flush()
-                except Exception as e:
-                    session.rollback()
-                    print(f"Error during flush: {str(e)}")
-                    continue
-                success = 0
-                errors = 0
-                # Добавляем места
-                for place_data in validated_batch:
-                    try:
-                        place = Place(
-                            id=uuid.uuid4(),
-                            name=str(place_data.get("full_name", "")).strip()
-                            or "[Без названия]",
-                            alternate_name=place_data.get("alternate_name"),
-                            address=place_data.get("address", ""),
-                            goo_rating=float(place_data.get("goo_rating", 0)),
-                            party_booking_name=place_data.get("party_booking_name", ""),
-                            booking_form=place_data.get("booking_form", ""),
-                            available_online=False,
-                        )
-                        # session.add(place)
-
-                        # Добавляем связи
-                        place.cuisines = [
-                            cuisines_map[c]
-                            for c in place_data["main_cuisine"]
-                            if c in cuisines_map
-                        ]
-                        place.metro_stations = [
-                            metros_map[m]
-                            for m in place_data["close_metro"]
-                            if m in metros_map
-                        ]
-                        success += 1
-                        session.add(place)
-                    except Exception as e:
-                        errors += 1
-                        print(f"🚨 Ошибка в {place_data.get('full_name')}: {str(e)}")
-                        session.rollback()
-                        print(
-                            f"Error creating place {place_data['full_name']}: {str(e)}"
-                        )
-                print(f"Результат: Успешно {success} | Ошибок {errors}")
-                try:
-                    session.commit()
-                    pbar.update(len(validated_batch))
-                except Exception as e:
-                    session.rollback()
-                    print(f"Commit error: {str(e)}")
-
-    except Exception as e:
-        print(f"Fatal error: {str(e)}")
-    finally:
-        session.close()
-
-
-if __name__ == "__main__":
-    import_places(
-        json_path="restaurant_data_leclick_1.json", db_uri=SQLALCHEMY_DATABASE_URL
+async def get_async_engine():
+    database_url = (
+        f"postgresql+asyncpg://{postgres_user}:{postgres_password}@"
+        f"{postgres_host}:{postgres_port}/{postgres_db}"
     )
+    return create_async_engine(database_url, echo=False)
+
+async def create_tables(engine, clear_existing=False):
+    async with engine.begin() as conn:
+        if clear_existing:
+            # Добавляем CASCADE для удаления зависимых объектов
+            await conn.run_sync(
+                lambda sync_conn: Base.metadata.drop_all(
+                    sync_conn, 
+                    tables=None, 
+                    cascade=True,  # Добавляем каскадное удаление
+                    checkfirst=False
+                )
+            )
+        await conn.run_sync(Base.metadata.create_all)
+
+@asynccontextmanager
+async def get_async_session():
+    engine = await get_async_engine()
+    AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+async def import_from_json(filename: str, clear_existing=True):
+    engine = await get_async_engine()
+    await create_tables(engine, clear_existing=clear_existing)
+    
+    with open(filename, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    async with get_async_session() as session:
+        for place_data in data:
+            place = Place(
+                id=uuid.uuid4(),
+                full_name=place_data['full_name'],
+                phone=place_data['phone'],
+                address=place_data['address'],
+                type=place_data['type'],
+                average_check=place_data.get('average_check'),
+                description=place_data['description'],
+                deposit_rules=place_data.get('deposit_rules'),
+                coordinates_lat=place_data['coordinates']['lat'],
+                coordinates_lon=place_data['coordinates']['lon'],
+                source_url=place_data['source']['url'],
+                source_domain=place_data['source']['domain']
+            )
+
+            # Обработка связей
+            await process_relationships(session, place, place_data)
+            
+            session.add(place)
+            await session.commit()
+
+async def process_relationships(session, place, place_data):
+    # Альтернативные названия
+    for name in place_data['alternate_name']:
+        alt_name = await session.run_sync(lambda s: s.query(AlternateName).filter_by(name=name).first())
+        if not alt_name:
+            alt_name = AlternateName(id=uuid.uuid4(), name=name)
+            session.add(alt_name)
+        place.alternate_names.append(alt_name)
+
+    # Метро
+    for metro in place_data['close_metro']:
+        metro_obj = await session.run_sync(lambda s: s.query(MetroStation).filter_by(name=metro).first())
+        if not metro_obj:
+            metro_obj = MetroStation(id=uuid.uuid4(), name=metro)
+            session.add(metro_obj)
+        place.metro_stations.append(metro_obj)
+
+    # Кухни
+    for cuisine in place_data['main_cuisine']:
+        cuisine_obj = await session.run_sync(lambda s: s.query(Cuisine).filter_by(name=cuisine).first())
+        if not cuisine_obj:
+            cuisine_obj = Cuisine(id=uuid.uuid4(), name=cuisine)
+            session.add(cuisine_obj)
+        place.cuisines.append(cuisine_obj)
+
+    # Особенности
+    for feature in place_data['features']:
+        feature_obj = await session.run_sync(lambda s: s.query(Feature).filter_by(name=feature).first())
+        if not feature_obj:
+            feature_obj = Feature(id=uuid.uuid4(), name=feature)
+            session.add(feature_obj)
+        place.features.append(feature_obj)
+
+    # Цели посещения
+    for purpose in place_data['visit_purposes']:
+        purpose_obj = await session.run_sync(lambda s: s.query(VisitPurpose).filter_by(name=purpose).first())
+        if not purpose_obj:
+            purpose_obj = VisitPurpose(id=uuid.uuid4(), name=purpose)
+            session.add(purpose_obj)
+        place.visit_purposes.append(purpose_obj)
+
+    # Часы работы
+    for day, hours in place_data['opening_hours'].items():
+        place.opening_hours.append(OpeningHour(
+            id=uuid.uuid4(),
+            day=day,
+            hours=hours
+        ))
+
+    # Фотографии
+    for photo_type, urls in place_data['photos'].items():
+        for url in urls:
+            place.photos.append(Photo(
+                id=uuid.uuid4(),
+                type=photo_type,
+                url=url
+            ))
+
+    # Ссылки на меню
+    for link_type, url in place_data['menu_links'].items():
+        place.menu_links.append(MenuLink(
+            id=uuid.uuid4(),
+            type=link_type,
+            url=url
+        ))
+
+    # Ссылки на бронирование
+    for link_type, url in place_data['booking_links'].items():
+        place.booking_links.append(BookingLink(
+            id=uuid.uuid4(),
+            type=link_type,
+            url=url
+        ))
+
+    # Отзывы
+    for review_data in place_data['reviews']:
+        place.reviews.append(Review(
+            id=uuid.uuid4(),
+            author=review_data['author'],
+            date=review_data['date'],
+            rating=review_data['rating'],
+            text=review_data['text'],
+            source=review_data.get('source')
+        ))
+
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(import_from_json('restaurants.json', clear_existing=False))

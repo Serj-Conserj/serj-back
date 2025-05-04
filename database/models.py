@@ -10,32 +10,32 @@ Base = declarative_base()
 # Таблицы связи многие-ко-многим
 place_alternate_names = Table(
     'place_alternate_names', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
-    Column('alternate_name_id', UUID(as_uuid=True), ForeignKey('alternate_names.id'), postgresql_ondelete="CASCADE")
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
+    Column('alternate_name_id', UUID(as_uuid=True), ForeignKey('alternate_names.id'))
 )
 
 place_metro_stations = Table(
     'place_metro_stations', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
-    Column('metro_station_id', UUID(as_uuid=True), ForeignKey('metro_stations.id'), postgresql_ondelete="CASCADE")
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
+    Column('metro_station_id', UUID(as_uuid=True), ForeignKey('metro_stations.id'))
 )
 
 place_cuisines = Table(
     'place_cuisines', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
-    Column('cuisine_id', UUID(as_uuid=True), ForeignKey('cuisines.id'), postgresql_ondelete="CASCADE")
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
+    Column('cuisine_id', UUID(as_uuid=True), ForeignKey('cuisines.id'))
 )
 
 place_features = Table(
     'place_features', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
-    Column('feature_id', UUID(as_uuid=True), ForeignKey('features.id'), postgresql_ondelete="CASCADE")
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
+    Column('feature_id', UUID(as_uuid=True), ForeignKey('features.id'))
 )
 
 place_visit_purposes = Table(
     'place_visit_purposes', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id'), postgresql_ondelete="CASCADE"),
-    Column('visit_purpose_id', UUID(as_uuid=True), ForeignKey('visit_purposes.id'), postgresql_ondelete="CASCADE")
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
+    Column('visit_purpose_id', UUID(as_uuid=True), ForeignKey('visit_purposes.id'))
 )
 
 class Place(AsyncAttrs, Base):
