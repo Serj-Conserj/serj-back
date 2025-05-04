@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 
 from models import Base, Place, AlternateName, MetroStation, Cuisine, Feature, VisitPurpose, \
     OpeningHour, Photo, MenuLink, BookingLink, Review
-from app_config import (
+from config import (
     postgres_user,
     postgres_password,
     postgres_host,
