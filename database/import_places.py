@@ -79,7 +79,8 @@ async def import_from_json(filename: str, clear_existing=True):
                 coordinates_lat=place_data['coordinates']['lat'],
                 coordinates_lon=place_data['coordinates']['lon'],
                 source_url=place_data['source']['url'],
-                source_domain=place_data['source']['domain']
+                source_domain=place_data['source']['domain'],
+                available_online=True
             )
 
             # Обработка связей

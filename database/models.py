@@ -1,11 +1,40 @@
 # models.py
-from sqlalchemy import Column, String, Float, JSON, ForeignKey, Table, Integer
+from sqlalchemy import Column, String, Float, JSON, ForeignKey, Table, Integer, DateTime, Boolean, func
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
 Base = declarative_base()
+
+class Member(Base):
+    __tablename__ = "members"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    telegram_id = Column(Integer, unique=True, index=True, nullable=False)
+    username = Column(String(255), nullable=True)
+    first_name = Column(String(255), nullable=True)
+    phone = Column(String(20), nullable=True)
+    is_admin = Column(Boolean, default=False)
+    is_superuser = Column(Boolean, default=False)
+
+
+# For storing Bookings
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("members.id"))
+    place_id = Column(UUID(as_uuid=True), ForeignKey("places.id"))
+    booking_date = Column(DateTime)
+    recording_date = Column(DateTime, server_default=func.now())
+    num_of_people = Column(Integer)
+    special_requests = Column(String)
+    confirmed = Column(Boolean, default=False)
+
+    member = relationship("Member")
+    place = relationship("Place")
+
 
 # Таблицы связи многие-ко-многим
 place_alternate_names = Table(
@@ -66,6 +95,7 @@ class Place(AsyncAttrs, Base):
     menu_links = relationship("MenuLink", back_populates="place")
     booking_links = relationship("BookingLink", back_populates="place")
     reviews = relationship("Review", back_populates="place")
+    available_online = Column(Boolean, default=True)
 
 class AlternateName(AsyncAttrs, Base):
     __tablename__ = 'alternate_names'
