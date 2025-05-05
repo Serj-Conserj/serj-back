@@ -39,32 +39,32 @@ class Booking(Base):
 # Таблицы связи многие-ко-многим
 place_alternate_names = Table(
     'place_alternate_names', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('alternate_name_id', UUID(as_uuid=True), ForeignKey('alternate_names.id'))
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id', ondelete='CASCADE')),
+    Column('alternate_name_id', UUID(as_uuid=True), ForeignKey('alternate_names.id', ondelete='CASCADE'))
 )
 
 place_metro_stations = Table(
     'place_metro_stations', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('metro_station_id', UUID(as_uuid=True), ForeignKey('metro_stations.id'))
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id', ondelete='CASCADE')),
+    Column('metro_station_id', UUID(as_uuid=True), ForeignKey('metro_stations.id', ondelete='CASCADE'))
 )
 
 place_cuisines = Table(
     'place_cuisines', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('cuisine_id', UUID(as_uuid=True), ForeignKey('cuisines.id'))
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id', ondelete='CASCADE')),
+    Column('cuisine_id', UUID(as_uuid=True), ForeignKey('cuisines.id', ondelete='CASCADE'))
 )
 
 place_features = Table(
     'place_features', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('feature_id', UUID(as_uuid=True), ForeignKey('features.id'))
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id', ondelete='CASCADE')),
+    Column('feature_id', UUID(as_uuid=True), ForeignKey('features.id', ondelete='CASCADE'))
 )
 
 place_visit_purposes = Table(
     'place_visit_purposes', Base.metadata,
-    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id')),
-    Column('visit_purpose_id', UUID(as_uuid=True), ForeignKey('visit_purposes.id'))
+    Column('place_id', UUID(as_uuid=True), ForeignKey('places.id', ondelete='CASCADE')),
+    Column('visit_purpose_id', UUID(as_uuid=True), ForeignKey('visit_purposes.id', ondelete='CASCADE'))
 )
 
 class Place(AsyncAttrs, Base):
@@ -75,7 +75,7 @@ class Place(AsyncAttrs, Base):
     phone = Column(String)
     address = Column(String)
     type = Column(String)
-    average_check = Column(Float)
+    average_check = Column(String)
     description = Column(String)
     deposit_rules = Column(String)
     coordinates_lat = Column(Float)

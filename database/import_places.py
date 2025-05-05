@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 
 # Добавляем корень проекта в пути поиска модулей
 project_root = Path(__file__).parent.parent
@@ -33,15 +33,13 @@ async def get_async_engine():
 async def create_tables(engine, clear_existing=False):
     async with engine.begin() as conn:
         if clear_existing:
-            # Добавляем CASCADE для удаления зависимых объектов
-            await conn.run_sync(
-                lambda sync_conn: Base.metadata.drop_all(
-                    sync_conn, 
-                    tables=None, 
-                    cascade=True,  # Добавляем каскадное удаление
-                    checkfirst=False
-                )
-            )
+            # Формируем список таблиц
+            tables = ",".join([f'"{table.name}"' for table in Base.metadata.tables.values()])
+            
+            # Выполняем SQL с использованием text()
+            await conn.execute(text(f"DROP TABLE IF EXISTS {tables} CASCADE"))
+            
+        # Создаем все таблицы
         await conn.run_sync(Base.metadata.create_all)
 
 @asynccontextmanager
@@ -73,7 +71,7 @@ async def import_from_json(filename: str, clear_existing=True):
                 phone=place_data['phone'],
                 address=place_data['address'],
                 type=place_data['type'],
-                average_check=place_data.get('average_check'),
+                average_check=str(place_data.get('average_check')),
                 description=place_data['description'],
                 deposit_rules=place_data.get('deposit_rules'),
                 coordinates_lat=place_data['coordinates']['lat'],
@@ -176,4 +174,4 @@ async def process_relationships(session, place, place_data):
 
 if __name__ == '__main__':
     import asyncio
-    asyncio.run(import_from_json('restaurants.json', clear_existing=False))
+    asyncio.run(import_from_json('restaurants.json', clear_existing=True))
