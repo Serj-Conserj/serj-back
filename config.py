@@ -40,5 +40,3 @@ rabbitmq_url = (
 # booking states
 booking_success_state = os.getenv("BOOKING_SUCCESS_STATE")
 booking_failure_state = os.getenv("BOOKING_FAILURE_STATE")
-
-# print(postgres_user)

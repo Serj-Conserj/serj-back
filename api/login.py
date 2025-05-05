@@ -1,50 +1,47 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
 from database.models import Member
-from api.utils.auth_tools import create_tokens, decode_token, get_current_member
+from api.utils.auth_tools import (
+    create_tokens,
+    decode_token,
+    get_current_member,
+    parse_validate_raw,
+    validate_web_app_data,
+    verify_telegram_auth,
+)
+from api.utils.schemas import TelegramAuth, RefreshRequest
 
 router = APIRouter()
 
 
-class RegisterRequest(BaseModel):
-    telegram_id: int
-    username: Optional[str] = None
-    first_name: Optional[str] = None
-    phone: Optional[str] = None
-
-
-class TelegramAuth(BaseModel):
-    id: int
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    username: Optional[str] = None
-    photo_url: Optional[str] = None
-    auth_date: int
-    hash: str
-
-
-class RefreshRequest(BaseModel):
-    refresh: str
-
-
 @router.post("/member", response_model=dict)
 async def login_via_telegram(
-    data: TelegramAuth,
+    payload: dict = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
-    # TODO: проверка data.hash по инструкции Telegram
-    q = await db.execute(select(Member).filter_by(telegram_id=data.id))
+    if "init_data" in payload:
+
+        raw = validate_web_app_data(payload.get("init_data"))
+        validated = parse_validate_raw(raw)
+        user_data = validated["user"]
+        ta = TelegramAuth(**user_data)
+    else:
+        ta = TelegramAuth(**payload)
+
+    telegram_id = ta.id
+
+    q = await db.execute(select(Member).filter_by(telegram_id=telegram_id))
     user = q.scalars().first()
     if not user:
         user = Member(
-            telegram_id=data.id,
-            username=data.username,
-            first_name=data.first_name,
+            telegram_id=telegram_id,
+            username=ta.username,
+            first_name=ta.first_name,
         )
         db.add(user)
         await db.commit()
