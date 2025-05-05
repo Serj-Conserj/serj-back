@@ -101,7 +101,7 @@ class ReviewSchema(BaseModel):
     date: str
     rating: int
     text: str
-    source: Optional[str] 
+    source: Optional[str]
 
     class Config:
         from_attributes = True

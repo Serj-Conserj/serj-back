@@ -6,13 +6,14 @@ from typing import Optional, Union, List
 from uuid import UUID
 from datetime import datetime
 import uuid
-
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload, joinedload
+from aio_pika import connect_robust, Message
+import json
+
 from database.database import get_db, AsyncSession
 from database.models import Booking, Place, Member
 from api.utils.auth_tools import get_current_member
-
 from config import (
     rabbitmq_url,
     CALL_QUEUE,
@@ -21,8 +22,7 @@ from config import (
     booking_failure_state,
     booking_success_state,
 )
-from aio_pika import connect_robust, Message
-import json
+
 
 router = APIRouter()
 
@@ -127,6 +127,7 @@ class PlaceResponse(BaseModel):
     available_online: bool
     metro_stations: List[MetroStationResponse] = []
     cuisines: List[CuisineResponse] = []
+    address: Optional[str]
 
     class Config:
         from_attributes = True
@@ -165,15 +166,25 @@ async def get_all_bookings(db: AsyncSession = Depends(get_db)):
 
         upcoming_bookings = []
         past_bookings = []
+        archived_bookings = []
+
+        now = datetime.utcnow()
 
         for booking in bookings:
             serialized = BookingResponse.from_orm(booking).dict()
-            if booking.confirmed:
+
+            if booking.booking_date < now:
+                archived_bookings.append(serialized)
+            elif booking.confirmed:
                 past_bookings.append(serialized)
             else:
                 upcoming_bookings.append(serialized)
 
-        return {"upcoming_bookings": upcoming_bookings, "past_bookings": past_bookings}
+        return {
+            "upcoming_bookings": upcoming_bookings,
+            "past_bookings": past_bookings,
+            "archived_bookings": archived_bookings,
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
