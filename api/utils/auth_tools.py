@@ -33,7 +33,6 @@ def verify_telegram_auth(data: dict) -> bool:
     computed_hash = hmac.new(
         secret_key, data_check_string.encode(), hashlib.sha256
     ).hexdigest()
-    print(computed_hash, hash_from_telegram)
     return computed_hash == hash_from_telegram
 
 
