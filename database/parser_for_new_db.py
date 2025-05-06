@@ -1,12 +1,13 @@
 
 from selenium import webdriver
-from selenium.webdriver.firefox.service import Service
-from webdriver_manager.firefox import GeckoDriverManager
+# from selenium.webdriver.firefox.service import Service
+# from webdriver_manager.firefox import GeckoDriverManager
 
 # Остальные импорты остаются без изменений
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.firefox.options import Options 
 import time
 
 import json
@@ -24,9 +25,15 @@ def parse_for_db():
     MAX_WAIT = 10
     SCROLL_PAUSE = 1
 
-    # Инициализация Firefox с автоматической установкой драйвера
-    service = Service(GeckoDriverManager().install())
-    driver = webdriver.Firefox(service=service)
+    # selenium_host = os.getenv("SELENIUM_HOST", "localhost")  # default fallback
+    options = Options()
+    options.headless = True
+    driver = webdriver.Remote(
+        command_executor=f"http://selenium:4444/wd/hub",
+        options=options
+    )
+
+
 
     # Остальной код остается без изменений
     driver.get(URL)

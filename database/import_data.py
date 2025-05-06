@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from sqlalchemy import select
 
-from models import (
+from database.models import (
     Place,
     AlternateName,
     MetroStation,
@@ -20,7 +20,7 @@ from models import (
     BookingLink,
     Review,
 )
-from database import engine, Base, AsyncSessionLocal
+from database.database import engine, Base, AsyncSessionLocal
 
 
 async def create_tables():

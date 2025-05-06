@@ -26,3 +26,4 @@ aiohttp
 bs4
 webdriver-manager
 selenium
+celery
