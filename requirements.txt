@@ -23,3 +23,6 @@ typing_extensions==4.13.1
 uvicorn==0.34.0
 aio_pika
 aiohttp
+bs4
+webdriver-manager
+selenium
