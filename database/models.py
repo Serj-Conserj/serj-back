@@ -9,11 +9,12 @@ from sqlalchemy import (
     Integer,
     DateTime,
     Boolean,
+    Index,
     func,
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 import uuid
 
 Base = declarative_base()
@@ -141,6 +142,25 @@ class Place(AsyncAttrs, Base):
     reviews = relationship("Review", back_populates="place")
     available_online = Column(Boolean, default=True)
 
+    __ts_vector__ = Column(
+        TSVECTOR(),
+        Computed(
+            "to_tsvector('russian', "
+            "coalesce(full_name, '') || ' ' || "
+            "coalesce(address, '') || ' ' || "
+            "coalesce(description, ''))"
+        )
+    )
+    
+    __table_args__ = (
+        Index('ix_place_search', __ts_vector__, postgresql_using='gin'),
+        Index('ix_place_trgm', 'full_name', 'address', postgresql_using='gin', 
+              postgresql_ops={
+                  'full_name': 'gin_trgm_ops',
+                  'address': 'gin_trgm_ops'
+              }),
+    )
+
     @property
     def name(self):
         return self.full_name
@@ -152,6 +172,11 @@ class AlternateName(AsyncAttrs, Base):
     name = Column(String, unique=True)
     places = relationship(
         "Place", secondary=place_alternate_names, back_populates="alternate_names"
+    )
+    
+    __table_args__ = (
+        Index('ix_alt_names', 'name', postgresql_using='gin',
+              postgresql_ops={'name': 'gin_trgm_ops'}),
     )
 
 

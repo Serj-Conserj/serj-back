@@ -1,43 +1,64 @@
+# api/routers/places.py
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from typing import List, Optional
-from uuid import UUID
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select, or_, func
+from typing import List
+import re
 
 from database.database import get_db
-from database.models import (
-    Place as PlaceModel,
-    Cuisine as CuisineModel,
-    MetroStation as MetroModel,
-)
+from database.models import Place, AlternateName, Review
 from api.utils.schemas import PlaceSchema
 
 router = APIRouter()
 
+def prepare_search_query(raw_query: str) -> str:
+    """Очистка и подготовка поискового запроса"""
+    cleaned = re.sub(r'\s+', ' ', raw_query.strip())  # Удаляем лишние пробелы
+    return f"%{cleaned}%"
 
 @router.get("/places", response_model=List[PlaceSchema])
-async def get_places(
-    name: Optional[str] = None,
+async def search_places(
+    search: str = Query(..., min_length=2, max_length=100, description="Поиск по названию, адресу и описанию"),
     db: AsyncSession = Depends(get_db),
+    limit: int = Query(20, ge=1, le=100),
 ):
-    stmt = select(PlaceModel).options(
-        selectinload(PlaceModel.cuisines),
-        selectinload(PlaceModel.metro_stations),
-        selectinload(PlaceModel.alternate_names),
-        selectinload(PlaceModel.features),
-        selectinload(PlaceModel.visit_purposes),
-        selectinload(PlaceModel.opening_hours),
-        selectinload(PlaceModel.photos),
-        selectinload(PlaceModel.menu_links),
-        selectinload(PlaceModel.booking_links),
-        selectinload(PlaceModel.reviews),
+    # Подготавливаем поисковый запрос
+    search_query = prepare_search_query(search)
+    
+    # Создаем базовый запрос
+    stmt = (
+        select(Place)
+        .options(
+            selectinload(Place.cuisines),
+            selectinload(Place.metro_stations),
+            selectinload(Place.alternate_names),
+            selectinload(Place.reviews)
+        )
+        .outerjoin(AlternateName)
+        .where(
+            or_(
+                Place.full_name.ilike(search_query),
+                Place.address.ilike(search_query),
+                Place.description.ilike(search_query),
+                AlternateName.name.ilike(search_query),
+                func.to_tsvector('russian', Place.full_name).match(
+                    func.plainto_tsquery('russian', search.strip())
+                )
+            )
+        )
+        .distinct()
+        .limit(limit)
     )
 
-    if name:
-        stmt = stmt.where(PlaceModel.full_name.ilike(f"%{name}%"))
-
+    # Выполняем запрос
     result = await db.execute(stmt)
     places = result.scalars().all()
+    
+    if not places:
+        raise HTTPException(
+            status_code=404,
+            detail="Ничего не найдено. Попробуйте изменить поисковый запрос"
+        )
+    
     return places

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional
 from uuid import UUID
 
@@ -109,24 +109,28 @@ class ReviewSchema(BaseModel):
 
 class PlaceSchema(BaseModel):
     id: UUID
-    name: Optional[str]
-    phone: Optional[str]
-    address: Optional[str]
-    type: Optional[str]
-    average_check: Optional[str]
-    description: Optional[str]
+    full_name: str = Field(..., description="Полное официальное название заведения")  # Изменено name -> full_name
+    phone: Optional[str] = Field(None, example="+7 999 123-45-67")
+    address: str = Field(..., example="ул. Примерная, 15")  # Сделано обязательным
+    type: Optional[str] = Field(None, example="Ресторан")
+    average_check: Optional[str] = Field(None, example="1500-2500 руб.")
+    description: Optional[str] = Field(None, example="Прекрасный ресторан с авторской кухней")
     deposit_rules: Optional[str]
     coordinates_lat: Optional[float]
     coordinates_lon: Optional[float]
     source_url: Optional[str]
     source_domain: Optional[str]
     available_online: bool
-
-    alternate_names: List[AlternateNameSchema] = []
-    metro_stations: List[MetroStationSchema] = []
-    cuisines: List[CuisineSchema] = []
-    features: List[FeatureSchema] = []
-    visit_purposes: List[VisitPurposeSchema] = []
+    
+    # Relationships with computed fields
+    rating: Optional[float] = Field(None, ge=1, le=5, description="Средний рейтинг на основе отзывов")
+    cuisines: List[str] = Field(..., example=["Итальянская", "Японская"])  # Только названия
+    metro_stations: List[str] = Field(..., example=["Чистые пруды", "Красные ворота"])
+    alternate_names: List[str] = Field(..., example=["Фарш Мясо", "Farsh na Myasnoy"])
+    features: List[str] = Field(..., example=["Веранда", "Парковка"])
+    visit_purposes: List[str] = Field(..., example=["Романтический ужин", "Бизнес-ланч"])
+    
+    # Остальные связи остаются как объекты
     opening_hours: List[OpeningHourSchema] = []
     photos: List[PhotoSchema] = []
     menu_links: List[MenuLinkSchema] = []
@@ -135,3 +139,31 @@ class PlaceSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+    # Валидаторы для преобразования отношений в списки названий
+    @validator('cuisines', pre=True)
+    def extract_cuisine_names(cls, v):
+        return [item.name for item in v] if isinstance(v, list) else []
+
+    @validator('metro_stations', pre=True)
+    def extract_metro_names(cls, v):
+        return [item.name for item in v] if isinstance(v, list) else []
+
+    @validator('alternate_names', pre=True)
+    def extract_alt_names(cls, v):
+        return [item.name for item in v] if isinstance(v, list) else []
+
+    @validator('features', pre=True)
+    def extract_feature_names(cls, v):
+        return [item.name for item in v] if isinstance(v, list) else []
+
+    @validator('visit_purposes', pre=True)
+    def extract_purpose_names(cls, v):
+        return [item.name for item in v] if isinstance(v, list) else []
+
+    @validator('rating', pre=True)
+    def calculate_rating(cls, v, values):
+        if 'reviews' in values and isinstance(values['reviews'], list):
+            ratings = [r.rating for r in values['reviews'] if r.rating]
+            return round(sum(ratings)/len(ratings), 1) if ratings else None
+        return None
