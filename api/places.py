@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, or_, func, exists
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,12 +11,14 @@ from database.models import (
     Place as PlaceModel,
     Cuisine as CuisineModel,
     MetroStation as MetroModel,
+    place_alternate_names,
+    AlternateName
 )
 from api.utils.schemas import PlaceSchema
 
 router = APIRouter()
 
-
+# Полный исправленный эндпоинт
 @router.get("/places", response_model=List[PlaceSchema])
 async def get_places(
     name: Optional[str] = None,
@@ -36,7 +38,19 @@ async def get_places(
     )
 
     if name:
-        stmt = stmt.where(PlaceModel.full_name.ilike(f"%{name}%"))
+        similarity_threshold = 0.2
+        place_sim = func.similarity(PlaceModel.full_name, name)
+        place_condition = place_sim >= similarity_threshold
+        
+        # Переносим создание subquery ВНУТРЬ условия if name
+        subquery = exists().where(
+            place_alternate_names.c.place_id == PlaceModel.id,
+            place_alternate_names.c.alternate_name_id == AlternateName.id,
+            func.similarity(AlternateName.name, name) >= similarity_threshold
+        )
+        
+        stmt = stmt.where(or_(place_condition, subquery))
+        stmt = stmt.order_by(place_sim.desc())
 
     result = await db.execute(stmt)
     places = result.scalars().all()
