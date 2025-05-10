@@ -56,7 +56,7 @@ async def import_from_json(filename: str):
             existing_place_result = await session.execute(
                 select(Place).where(
                     Place.full_name == place_data["full_name"],
-                    Place.address == place_data["address"]
+                    Place.address == place_data["address"],
                 )
             )
             if existing_place_result.scalar():
@@ -89,7 +89,9 @@ async def import_from_json(filename: str):
 async def process_relationships(session, place, place_data):
     # Альтернативные названия
     for name in place_data["alternate_name"]:
-        result = await session.execute(select(AlternateName).where(AlternateName.name == name))
+        result = await session.execute(
+            select(AlternateName).where(AlternateName.name == name)
+        )
         alt_name = result.scalar()
         if not alt_name:
             alt_name = AlternateName(id=uuid.uuid4(), name=name)
@@ -98,7 +100,9 @@ async def process_relationships(session, place, place_data):
 
     # Метро
     for metro in place_data["close_metro"]:
-        result = await session.execute(select(MetroStation).where(MetroStation.name == metro))
+        result = await session.execute(
+            select(MetroStation).where(MetroStation.name == metro)
+        )
         metro_obj = result.scalar()
         if not metro_obj:
             metro_obj = MetroStation(id=uuid.uuid4(), name=metro)
@@ -125,7 +129,9 @@ async def process_relationships(session, place, place_data):
 
     # Цели посещения
     for purpose in place_data["visit_purposes"]:
-        result = await session.execute(select(VisitPurpose).where(VisitPurpose.name == purpose))
+        result = await session.execute(
+            select(VisitPurpose).where(VisitPurpose.name == purpose)
+        )
         purpose_obj = result.scalar()
         if not purpose_obj:
             purpose_obj = VisitPurpose(id=uuid.uuid4(), name=purpose)
@@ -147,7 +153,9 @@ async def process_relationships(session, place, place_data):
 
     # Ссылки на бронирование
     for link_type, url in place_data["booking_links"].items():
-        place.booking_links.append(BookingLink(id=uuid.uuid4(), type=link_type, url=url))
+        place.booking_links.append(
+            BookingLink(id=uuid.uuid4(), type=link_type, url=url)
+        )
 
     # Отзывы
     for review_data in place_data["reviews"]:

@@ -151,14 +151,21 @@ class BookingResponse(BaseModel):
 
 
 @router.get("/bookings")
-async def get_all_bookings(db: AsyncSession = Depends(get_db)):
+async def get_all_bookings(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_member),
+):
     try:
-        stmt = select(Booking).options(
-            selectinload(Booking.member),
-            selectinload(Booking.place).options(
-                selectinload(Place.metro_stations),
-                selectinload(Place.cuisines),
-            ),
+        stmt = (
+            select(Booking)
+            .where(Booking.user_id == current_user.id)  # ← фильтрация по пользователю
+            .options(
+                selectinload(Booking.member),
+                selectinload(Booking.place).options(
+                    selectinload(Place.metro_stations),
+                    selectinload(Place.cuisines),
+                ),
+            )
         )
 
         result = await db.execute(stmt)

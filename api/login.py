@@ -67,3 +67,13 @@ async def refresh_token(
 @router.get("/protected")
 async def protected_route(current: Member = Depends(get_current_member)):
     return {"msg": f"Hello, {current.username or current.first_name}!"}
+
+
+@router.get("/member_phone")
+async def get_all_bookings(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_member),
+):
+    result = await db.execute(select(Member.phone).where(Member.id == current_user.id))
+    phone = result.scalar_one_or_none()
+    return phone

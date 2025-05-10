@@ -6,7 +6,7 @@ celery_app = Celery(
     "tasks",
     broker=f"amqp://{os.getenv('USERNAME_QUEUE')}:{os.getenv('PASSWORD_QUEUE')}@rabbitmq:5672//",
     backend=None,
-    include=["tasks"]
+    include=["tasks"],
 )
 
 celery_app.conf.timezone = "Europe/Moscow"
@@ -20,6 +20,6 @@ celery_app.conf.beat_schedule = {
     "import-every-tuesday-4am": {
         "task": "tasks.import_places_task",
         "schedule": crontab(hour=5, minute=0, day_of_week=2),
-        "args": ("database/restaurants.json",)
+        "args": ("database/restaurants.json",),
     },
 }
