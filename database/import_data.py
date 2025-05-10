@@ -59,10 +59,16 @@ async def import_from_json(filename: str):
                     Place.address == place_data["address"]
                 )
             )
+            bl = place_data.get("booking_links", {})
+            if isinstance(bl, dict):
+                has_main = bool(bl.get("main"))
+            else:
+                has_main = any(item.get("type") == "main" for item in bl)
+            print(f"has_main: {has_main}")
             if existing_place_result.scalar():
                 skipped += 1
                 continue
-            print(f"Импортируем: {place_data['full_name']}")
+            
             place = Place(
                 id=uuid.uuid4(),
                 full_name=place_data["full_name"],
@@ -76,7 +82,7 @@ async def import_from_json(filename: str):
                 coordinates_lon=place_data["coordinates"]["lon"],
                 source_url=place_data["source"]["url"],
                 source_domain=place_data["source"]["domain"],
-                available_online=True,
+                available_online=has_main,
             )
 
             await process_relationships(session, place, place_data)
