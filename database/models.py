@@ -10,7 +10,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     func,
-    Text
+    Text,
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import AsyncAttrs

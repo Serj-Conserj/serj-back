@@ -19,11 +19,13 @@ from api.utils.schemas import PlaceSchema
 
 router = APIRouter()
 
+
 def create_tsvector(*args):
     exp = args[0]
     for e in args[1:]:
-        exp += ' ' + e
-    return func.to_tsvector('russian', exp)
+        exp += " " + e
+    return func.to_tsvector("russian", exp)
+
 
 @router.get("/places", response_model=List[PlaceSchema])
 async def get_places(
@@ -51,32 +53,31 @@ async def get_places(
         # processed_name = latin_to_cyrillic(name.lower().replace(' ', ''))
         # clean_query = func.plainto_tsquery('russian', name)
 
-
         processed_name = name.translate(
-        str.maketrans(
-            'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-            'абцдефгхийклмнопкрстюввхузАБЦДЕФГХИЙКЛМНОПКРСТЮВВХУЗ'
-        )
-            ).lower()
+            str.maketrans(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                "абцдефгхийклмнопкрстюввхузАБЦДЕФГХИЙКЛМНОПКРСТЮВВХУЗ",
+            )
+        ).lower()
 
         stmt_fts = stmt.where(
-            text("to_tsvector('russian', search_text) @@ plainto_tsquery('russian', :query)")
+            text(
+                "to_tsvector('russian', search_text) @@ plainto_tsquery('russian', :query)"
+            )
         ).params(query=processed_name)
 
         # Шаг 2: Если результатов мало, используем триграммы
         result_fts = await db.execute(stmt_fts.limit(limit))
         places_fts = result_fts.scalars().all()
-        
-        if len(places_fts) < limit//2:
+
+        if len(places_fts) < limit // 2:
             stmt_similar = stmt.where(
                 func.similarity(PlaceModel.search_text, name) > similarity_threshold
-            ).order_by(
-                func.similarity(PlaceModel.search_text, name).desc()
-            )
+            ).order_by(func.similarity(PlaceModel.search_text, name).desc())
             result_similar = await db.execute(stmt_similar.limit(limit))
             places_similar = result_similar.scalars().all()
-            return places_fts + places_similar[:limit - len(places_fts)]
-        
+            return places_fts + places_similar[: limit - len(places_fts)]
+
         return places_fts
 
     stmt = stmt.order_by(PlaceModel.full_name).offset(offset).limit(limit)

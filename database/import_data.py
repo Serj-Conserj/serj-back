@@ -52,21 +52,22 @@ async def import_from_json(filename: str):
 
     async with get_async_session() as session:
         for place_data in data:
+
             existing_place_result = await session.execute(
                 select(Place).where(
                     Place.full_name == place_data["full_name"],
                     Place.address == place_data["address"],
                 )
             )
+            if existing_place_result.scalar():
+                skipped += 1
+                continue
             bl = place_data.get("booking_links", {})
             if isinstance(bl, dict):
                 has_main = bool(bl.get("main"))
             else:
                 has_main = any(item.get("type") == "main" for item in bl)
-            if existing_place_result.scalar():
-                skipped += 1
-                continue
-            
+
             place = Place(
                 id=uuid.uuid4(),
                 full_name=place_data["full_name"],
@@ -80,19 +81,24 @@ async def import_from_json(filename: str):
                 coordinates_lon=place_data["coordinates"]["lon"],
                 source_url=place_data["source"]["url"],
                 source_domain=place_data["source"]["domain"],
-
-                search_text = (place_data["full_name"] + ' ' + place_data["address"] + 
-                    ' '.join(name for name in place_data["close_metro"])).translate(
+                search_text=(
+                    place_data["full_name"]
+                    + " "
+                    + place_data["address"]
+                    + " ".join(name for name in place_data["close_metro"])
+                )
+                .translate(
                     str.maketrans(
-                        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
-                        'абцдефгхийклмнопкрстюввхузАБЦДЕФГХИЙКЛМНОПКРСТЮВВХУЗ'
+                        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                        "абцдефгхийклмнопкрстюввхузАБЦДЕФГХИЙКЛМНОПКРСТЮВВХУЗ",
                     )
-                        ).lower()
-
+                )
+                .lower(),
                 available_online=has_main,
             )
 
             await process_relationships(session, place, place_data)
+
             session.add(place)
             added += 1
 
