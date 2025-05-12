@@ -48,11 +48,21 @@ async def get_places(
 
     if name:
         # Шаг 1: Быстрый полнотекстовый поиск
-        clean_query = func.plainto_tsquery('russian', name)
+        # processed_name = latin_to_cyrillic(name.lower().replace(' ', ''))
+        # clean_query = func.plainto_tsquery('russian', name)
+
+
+        processed_name = name.translate(
+        str.maketrans(
+            'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            'абцдефгхийклмнопкрстюввхузАБЦДЕФГХИЙКЛМНОПКРСТЮВВХУЗ'
+        )
+            ).lower()
+
         stmt_fts = stmt.where(
             text("to_tsvector('russian', search_text) @@ plainto_tsquery('russian', :query)")
-        ).params(query=name)
-            
+        ).params(query=processed_name)
+
         # Шаг 2: Если результатов мало, используем триграммы
         result_fts = await db.execute(stmt_fts.limit(limit))
         places_fts = result_fts.scalars().all()
