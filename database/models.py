@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     func,
+    Text
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import AsyncAttrs
@@ -140,6 +141,7 @@ class Place(AsyncAttrs, Base):
     booking_links = relationship("BookingLink", back_populates="place")
     reviews = relationship("Review", back_populates="place")
     available_online = Column(Boolean, default=True)
+    search_text = Column(Text, nullable=True, index=True)
 
     @property
     def name(self):
