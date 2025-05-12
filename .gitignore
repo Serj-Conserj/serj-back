@@ -5,3 +5,4 @@ venv
 .venv
 docker-compose.yml
 app.log
+celerybeat-schedule
