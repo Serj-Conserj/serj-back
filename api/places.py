@@ -52,7 +52,7 @@ async def get_places(
         stmt_fts = stmt.where(
             text("to_tsvector('russian', search_text) @@ plainto_tsquery('russian', :query)")
         ).params(query=name)
-        
+            
         # Шаг 2: Если результатов мало, используем триграммы
         result_fts = await db.execute(stmt_fts.limit(limit))
         places_fts = result_fts.scalars().all()
