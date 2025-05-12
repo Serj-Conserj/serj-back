@@ -19,10 +19,28 @@ from api.utils.schemas import PlaceSchema
 
 router = APIRouter()
 
-def normalize_search_term(term: str) -> str:
-    """Удаляем спецсимволы и приводим к нижнему регистру"""
-    return term.translate(str.maketrans('', '', '!@#$%^&*()_+<>?.,;:-')).strip().lower()
+TRANSLIT_MAP = {
+    'a': 'а', 'A': 'А',
+    'B': 'В', 'c': 'с', 'C': 'С',
+    'e': 'е', 'E': 'Е',
+    'o': 'о', 'O': 'О',
+    'p': 'р', 'P': 'Р',
+    'H': 'Н', 'K': 'К',
+    'x': 'х', 'X': 'Х',
+    'y': 'у', 'Y': 'У',
+    'M': 'М', 'T': 'Т',
+    'r': 'р', 'R': 'Р',
+    's': 'с', 'S': 'С',
+    'F': 'Ф', 'W': 'Ш'  # Пример для "FARШ"
+}
 
+def normalize_search_term(term: str) -> str:
+    """Транслитерируем латиницу в кириллицу и очищаем от спецсимволов"""
+    # Заменяем символы согласно словарю
+    transliterated = ''.join([TRANSLIT_MAP.get(c, c) for c in term])
+    # Удаляем оставшиеся спецсимволы
+    cleaned = transliterated.translate(str.maketrans('', '', '!@#$%^&*()_+<>?.,;:-'))
+    return cleaned.strip().lower()
 
 @router.get("/places", response_model=List[PlaceSchema])
 async def get_places(
@@ -47,26 +65,39 @@ async def get_places(
     if name:
         normalized_name = normalize_search_term(name)
         
-        # Создаем SQL-функции для нормализации
-        clean_full_name = func.regexp_replace(
-            func.lower(PlaceModel.full_name), 
+        # Создаем выражения для нормализации названий в базе
+        base_normalization = func.regexp_replace(
+            func.lower(PlaceModel.full_name),
             '[^\\w\\sа-яА-Я]', 
             '', 
             'g'
         )
         
-        clean_alt_name = func.regexp_replace(
-            func.lower(AlternateName.name), 
+        # Добавляем замену латинских символов через SQL-функцию
+        normalized_full_name = func.translate(
+            base_normalization,
+            'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            'абсдефгхийклмнопрстуввхызАБСДЕФГХИЙКЛМНОПРСТУВВХЫЗ'
+        )
+
+        # Аналогично для альтернативных названий
+        alt_normalization = func.regexp_replace(
+            func.lower(AlternateName.name),
             '[^\\w\\sа-яА-Я]', 
             '', 
             'g'
+        )
+        normalized_alt_name = func.translate(
+            alt_normalization,
+            'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            'абсдефгхийклмнопрстуввхызАБСДЕФГХИЙКЛМНОПРСТУВВХЫЗ'
         )
 
         stmt = stmt.outerjoin(PlaceModel.alternate_names)
         stmt = stmt.where(
             or_(
-                clean_full_name.ilike(f"%{normalized_name}%"),
-                clean_alt_name.ilike(f"%{normalized_name}%")
+                normalized_full_name.ilike(f"%{normalized_name}%"),
+                normalized_alt_name.ilike(f"%{normalized_name}%")
             )
         )
 
