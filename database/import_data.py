@@ -77,8 +77,13 @@ async def import_from_json(filename: str):
                 source_url=place_data["source"]["url"],
                 source_domain=place_data["source"]["domain"],
                 available_online=True,
-                search_text = (place_data["full_name"] + ' ' + place_data["address"]) + 
-                    ' '.join(name for name in place_data["close_metro"])
+                search_text = (place_data["full_name"] + ' ' + place_data["address"] + 
+                    ' '.join(name for name in place_data["close_metro"])).translate(
+                    str.maketrans(
+                        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                        'абцдефгхийклмнопкрстюввхузАБЦДЕФГХИЙКЛМНОПКРСТЮВВХУЗ'
+                    )
+                        ).lower()
             )
 
             await process_relationships(session, place, place_data)
