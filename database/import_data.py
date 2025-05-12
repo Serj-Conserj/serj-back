@@ -52,7 +52,6 @@ async def import_from_json(filename: str):
 
     async with get_async_session() as session:
         for place_data in data:
-            # Проверка: есть ли уже такая запись по full_name + address
             existing_place_result = await session.execute(
                 select(Place).where(
                     Place.full_name == place_data["full_name"],
@@ -64,7 +63,6 @@ async def import_from_json(filename: str):
                 has_main = bool(bl.get("main"))
             else:
                 has_main = any(item.get("type") == "main" for item in bl)
-            print(f"has_main: {has_main}")
             if existing_place_result.scalar():
                 skipped += 1
                 continue
@@ -82,6 +80,15 @@ async def import_from_json(filename: str):
                 coordinates_lon=place_data["coordinates"]["lon"],
                 source_url=place_data["source"]["url"],
                 source_domain=place_data["source"]["domain"],
+
+                search_text = (place_data["full_name"] + ' ' + place_data["address"] + 
+                    ' '.join(name for name in place_data["close_metro"])).translate(
+                    str.maketrans(
+                        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                        'абцдефгхийклмнопкрстюввхузАБЦДЕФГХИЙКЛМНОПКРСТЮВВХУЗ'
+                    )
+                        ).lower()
+
                 available_online=has_main,
             )
 
