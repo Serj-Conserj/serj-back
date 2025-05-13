@@ -85,7 +85,7 @@ async def import_from_json(filename: str):
                     place_data["full_name"]
                     + " "
                     + place_data["address"]
-                    + " ".join(name for name in place_data["close_metro"])
+                    + " ".join(name for name in place_data.get("close_metro", ""))
                 )
                 .translate(
                     str.maketrans(

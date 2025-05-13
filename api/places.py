@@ -32,7 +32,7 @@ async def get_places(
     name: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    similarity_threshold: float = Query(0.3, ge=0.0, le=1.0),
+    similarity_threshold: float = Query(0, ge=0.0, le=1.0),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(PlaceModel).options(
