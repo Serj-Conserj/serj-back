@@ -51,17 +51,72 @@ async def import_from_json(filename: str):
     skipped = 0
 
     async with get_async_session() as session:
-        for place_data in data:
+        # Шаг 1: Собираем существующие данные
+        existing_restaurant_ids = set()
+        existing_name_address_pairs = set()
+        
+        existing_places = await session.execute(select(Place))
+        for place in existing_places.scalars():
+            # Сбор restaurant_id из booking_links
+            if place.booking_links:
+                main_link = None
+                if isinstance(place.booking_links, dict):
+                    main_link = place.booking_links.get("main", "")
+                elif isinstance(place.booking_links, list):
+                    for item in place.booking_links:
+                        if item.get("type") == "main":
+                            main_link = item.get("url", "")
+                            break
+                if main_link and "/partner-reserve/id/" in main_link:
+                    parts = main_link.split("/partner-reserve/id/")
+                    if len(parts) > 1:
+                        restaurant_id = parts[1].split("/")[0]
+                        existing_restaurant_ids.add(restaurant_id)
+            # Сбор пар (название, адрес)
+            existing_name_address_pairs.add((place.full_name, place.address))
 
-            existing_place_result = await session.execute(
-                select(Place).where(
-                    Place.full_name == place_data["full_name"],
-                    Place.address == place_data["address"],
+        # Шаг 2: Обработка новых записей
+        for place_data in data:
+            # Извлечение restaurant_id из новой записи
+            new_restaurant_id = None
+            booking_links = place_data.get("booking_links", {})
+            
+            # Получение main ссылки
+            if isinstance(booking_links, dict):
+                main_link = booking_links.get("main", "")
+            else:
+                main_link = next(
+                    (item["url"] for item in booking_links if item.get("type") == "main"), ""
                 )
-            )
-            if existing_place_result.scalar():
+
+            # Парсинг restaurant_id
+            if main_link and "/partner-reserve/id/" in main_link:
+                parts = main_link.split("/partner-reserve/id/")
+                if len(parts) > 1:
+                    new_restaurant_id = parts[1].split("/")[0]
+
+            # Проверка дубликатов
+            is_duplicate = False
+            new_name = place_data["full_name"]
+            new_address = place_data["address"]
+
+            if new_restaurant_id:
+                # Проверка по restaurant_id
+                if new_restaurant_id in existing_restaurant_ids:
+                    is_duplicate = True
+                else:
+                    # Дополнительная проверка по названию и адресу
+                    if (new_name, new_address) in existing_name_address_pairs:
+                        is_duplicate = True
+            else:
+                # Проверка только по названию и адресу
+                if (new_name, new_address) in existing_name_address_pairs:
+                    is_duplicate = True
+
+            if is_duplicate:
                 skipped += 1
                 continue
+
             bl = place_data.get("booking_links", {})
             if isinstance(bl, dict):
                 has_main = bool(bl.get("main"))
