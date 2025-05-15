@@ -6,13 +6,13 @@ from typing import Optional, Union, List
 from uuid import UUID
 from datetime import datetime
 import uuid
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload, joinedload
 from aio_pika import connect_robust, Message
 import json
 
 from database.database import get_db, AsyncSession
-from database.models import Booking, Place, Member
+from database.models import Booking, Place, Member, Cuisine, MetroStation
 from api.utils.auth_tools import get_current_member
 from config import (
     rabbitmq_url,
@@ -221,6 +221,58 @@ async def send_telegram_message(chat_id: str, text: str):
                     f"Ошибка отправки в Telegram: {resp.status} - {response_text}"
                 )
 
+async def get_similar_places(place_id: UUID, db: AsyncSession, limit: int = 5) -> List[Place]:
+    """
+    Возвращает похожие заведения по следующим критериям:
+    - Совпадающие кухни
+    - Совпадающие станции метро
+    - Такой же тип заведения
+    - Аналогичный средний чек
+    """
+    # Получаем исходное заведение
+    result = await db.execute(
+        select(Place)
+        .options(
+            selectinload(Place.cuisines),
+            selectinload(Place.metro_stations),
+            selectinload(Place.features)
+        )
+        .where(Place.id == place_id)
+    )
+    original_place = result.scalars().first()
+    
+    if not original_place:
+        return []
+
+    # Собираем параметры для поиска
+    cuisine_ids = [c.id for c in original_place.cuisines]
+    metro_ids = [m.id for m in original_place.metro_stations]
+    place_type = original_place.type
+    average_check = original_place.average_check
+
+    # Ищем похожие заведения
+    query = (
+        select(Place)
+        .options(
+            selectinload(Place.cuisines),
+            selectinload(Place.metro_stations)
+        .where(
+            Place.id != original_place.id,
+            or_(
+                Place.cuisines.any(Cuisine.id.in_(cuisine_ids)),
+                Place.metro_stations.any(MetroStation.id.in_(metro_ids)),
+                Place.type == place_type
+            )
+        )
+        .order_by(
+            Place.average_check.desc() if average_check == "high" 
+            else Place.average_check.asc()
+        )
+        .limit(limit)
+    ))
+
+    result = await db.execute(query)
+    return result.scalars().all()
 
 @router.post(
     "/bookings/update_status"
@@ -240,6 +292,7 @@ async def update_booking_status(
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
 
+        similar_places = []
         if data.status == booking_success_state:
             booking.confirmed = True
             user_message = (
@@ -249,9 +302,11 @@ async def update_booking_status(
             )
         elif data.status == booking_failure_state:
             booking.confirmed = False
+            similar_places = await get_similar_places(booking.place_id, db)
             user_message = (
-                f"❌ К сожалению, мы не смогли забронировать для вас место на {booking.booking_date.strftime('%d.%m.%Y %H:%M')}.\n"
-                "Попробуйте выбрать другое время или место."
+                f"❌ Не удалось забронировать {booking.place.full_name}\n"
+                "Возможно вас заинтересуют:\n" + 
+                "\n".join([f"• {p.full_name}" for p in similar_places[:3]])
             )
         else:
             raise HTTPException(status_code=400, detail="Invalid status value")
