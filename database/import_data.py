@@ -125,7 +125,7 @@ async def import_from_json(filename: str):
 
             place = Place(
                 id=uuid.uuid4(),
-                full_name=place_data["full_name"],
+                full_name=f'{place_data["full_name"]} ({place_data["address"]})', 
                 phone=place_data["phone"],
                 address=place_data["address"],
                 type=place_data["type"],
