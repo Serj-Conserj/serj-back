@@ -2,17 +2,18 @@ import asyncio
 from celery_app import celery_app
 from database.import_data import import_from_json
 from database.parser_for_new_db import parse_for_db
+from api.utils.logger import logger
 
 
 @celery_app.task
 def parse_places_task():
-    print("Starting parse...")
+    logger.info("🛠️  Starting parse...")
     asyncio.run(parse_for_db())
-    print("Parsing done")
+    logger.info("✅ Parsing done")
 
 
 @celery_app.task
 def import_places_task(filename: str):
-    print("Starting import...")
+    logger.info(f"📥 Starting import from {filename}...")
     asyncio.run(import_from_json(filename))
-    print("Import done")
+    logger.info("✅ Import done")

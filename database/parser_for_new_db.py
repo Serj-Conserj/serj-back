@@ -1,51 +1,40 @@
+import os
+import time
+import json
+import re
+import requests
+from datetime import datetime
+from urllib.parse import urljoin, urlparse, unquote
+from bs4 import BeautifulSoup
 from selenium import webdriver
-
-# from selenium.webdriver.firefox.service import Service
-# from webdriver_manager.firefox import GeckoDriverManager
-
-# Остальные импорты остаются без изменений
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.firefox.options import Options
-import time
-
-import json
-import re
-import time
-from datetime import datetime
-
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse, unquote
+from api.utils.logger import logger
 
 
 def parse_for_db():
-    # Настройки
     URL = "https://leclick.ru/restaurants/index"
     OUTPUT_FILE = "database/restaurants.txt"
     MAX_WAIT = 10
     SCROLL_PAUSE = 1
 
-    # selenium_host = os.getenv("SELENIUM_HOST", "localhost")  # default fallback
     options = Options()
     options.headless = True
     driver = webdriver.Remote(
-        command_executor=f"http://selenium:4444/wd/hub", options=options
+        command_executor="http://selenium:4444/wd/hub", options=options
     )
 
-    # Остальной код остается без изменений
     driver.get(URL)
     restaurant_links = set()
 
     def scroll_to_bottom():
         last_height = driver.execute_script("return document.body.scrollHeight")
-
         while True:
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(SCROLL_PAUSE)
             new_height = driver.execute_script("return document.body.scrollHeight")
-
             if new_height == last_height:
                 break
             last_height = new_height
@@ -55,7 +44,6 @@ def parse_for_db():
             WebDriverWait(driver, MAX_WAIT).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a.image"))
             )
-
             links = driver.find_elements(
                 By.CSS_SELECTOR, 'a.image[href^="/restaurant/"]'
             )
@@ -63,7 +51,7 @@ def parse_for_db():
                 href = link.get_attribute("href")
                 if href and href not in restaurant_links:
                     restaurant_links.add(href)
-                    print(f"Найдено: {href}")
+                    logger.info(f"🔗 Найдена ссылка: {href}")
 
             prev_count = len(links)
             scroll_to_bottom()
@@ -72,11 +60,11 @@ def parse_for_db():
                 By.CSS_SELECTOR, 'a.image[href^="/restaurant/"]'
             )
             if len(new_links) == prev_count:
-                print("Завершаем сбор данных...")
+                logger.info("📦 Завершен сбор всех ссылок")
                 break
 
     except Exception as e:
-        print(f"Ошибка: {str(e)}")
+        logger.error(f"❌ Ошибка при парсинге ссылок: {e}")
     finally:
         driver.quit()
 
@@ -84,7 +72,7 @@ def parse_for_db():
         for link in restaurant_links:
             f.write(f"{link}\n")
 
-    print(f"Собрано {len(restaurant_links)} ссылок. Файл: {OUTPUT_FILE}")
+    logger.info(f"✅ Собрано {len(restaurant_links)} ссылок. Сохранено в {OUTPUT_FILE}")
 
     class RestaurantParser:
         def __init__(self, html, full_url):
@@ -94,24 +82,18 @@ def parse_for_db():
 
         def get_restaurant_id(self):
             try:
-                # Ищем элемент с классом rest-fav-bl и извлекаем data-id
                 fav_block = self.soup.find("div", class_="rest-fav-bl")
                 if fav_block and fav_block.has_attr("data-id"):
                     return fav_block["data-id"]
-
-                # Фолбек для старых версий (если потребуется)
                 legacy_div = self.soup.find("div", {"data-restaurant-id": True})
                 return legacy_div["data-restaurant-id"] if legacy_div else None
-
             except Exception as e:
-                print(f"Error getting restaurant id: {str(e)}")
+                logger.warning(f"⚠️ Не удалось получить ID ресторана: {e}")
                 return None
 
         def get_names(self):
             names = {"main": None, "alternate": []}
-
             try:
-                # 1. Извлечение из URL
                 url_path = urlparse(self.full_url).path
                 if "/restaurant/" in url_path:
                     slug = unquote(url_path.split("/restaurant/")[-1].split("/")[0])
@@ -120,14 +102,12 @@ def parse_for_db():
                     )
                     names["alternate"].append(name_from_url)
 
-                # 2. Из data-атрибута
                 alternate_name_span = self.soup.find(
                     "span", class_="rest-card__fav-icon"
                 )
                 if alternate_name_span and "data-name" in alternate_name_span.attrs:
                     names["alternate"].append(alternate_name_span["data-name"].strip())
 
-                # 3. Из заголовка
                 title_text = self.soup.select_one(".restTitle h1")
                 if title_text:
                     title_parts = title_text.text.strip().split("/")
@@ -144,10 +124,8 @@ def parse_for_db():
                         if name and name != names["main"]
                     }
                 )
-
             except Exception as e:
-                print(f"Error parsing names: {str(e)}")
-
+                logger.warning(f"⚠️ Ошибка при разборе имен: {e}")
             return names
 
         def get_phone(self):
@@ -164,8 +142,10 @@ def parse_for_db():
 
         def get_metro(self):
             try:
-                metro_text = self.soup.select_one(".metro").text.strip()
-                return [m.strip() for m in metro_text.split(",")]
+                return [
+                    m.strip()
+                    for m in self.soup.select_one(".metro").text.strip().split(",")
+                ]
             except AttributeError:
                 return []
 
@@ -182,11 +162,9 @@ def parse_for_db():
                     .find("span", string="Средний чек:")
                     .find_parent("div", class_="items")
                 )
-
                 check_text = check_block.get_text(strip=True).replace(
                     "Средний чек:", ""
                 )
-
                 if "—" in check_text or "-" in check_text:
                     return check_text.replace("—", "-").strip()
                 return int(re.sub(r"\D", "", check_text))
@@ -210,19 +188,15 @@ def parse_for_db():
                 "d5": "ПТ",
                 "d6": "СБ",
             }
-
             for day in self.soup.select('[class^="item d"]'):
                 class_name = [c for c in day["class"] if c.startswith("d")][0]
                 time_from = day.select_one(".timeFrom")
                 time_to = day.select_one(".timeTo")
-
-                if time_from and time_to:
-                    hours[
-                        days_map[class_name]
-                    ] = f"{time_from.text.strip()} - {time_to.text.strip()}"
-                else:
-                    hours[days_map[class_name]] = "весь день"
-
+                hours[days_map[class_name]] = (
+                    f"{time_from.text.strip()} - {time_to.text.strip()}"
+                    if time_from and time_to
+                    else "весь день"
+                )
             return hours
 
         def get_menu_links(self):
@@ -230,14 +204,12 @@ def parse_for_db():
             try:
                 for link in self.soup.select(".goToMenu"):
                     menu_type = link.text.strip()
-                    url = link["href"]
-                    menus[menu_type] = url
+                    menus[menu_type] = link["href"]
             except AttributeError:
                 pass
             return menus
 
         def get_photos(self):
-            # Группируем фото по типам
             photos = {"interior": [], "food": [], "facade": []}
             for a in self.soup.select("a[type]"):
                 photo_type = a["type"]
@@ -259,59 +231,53 @@ def parse_for_db():
             booking_links = {}
             restraunt_id = self.get_restaurant_id()
             try:
-                # Основное бронирование
-                main_booking = self.soup.select_one(".bookingBtn.mainBooking a")
-                if main_booking:
-                    # full_url = urljoin(self.base_url, main_booking['href'])
-                    booking_links[
-                        "main"
-                    ] = f"https://leclick.ru/restaurants/partner-reserve/id/{restraunt_id}/from/website?lang=ru"
-
-                # Бронирование банкета
-                banquet_booking = self.soup.select_one(
-                    '.bookingBtn a[href*="banquet=1"]'
-                )
-                if banquet_booking:
-                    # full_url = urljoin(self.base_url, banquet_booking['href'])
-                    booking_links[
-                        "banquet"
-                    ] = f"https://leclick.ru/restaurants/partner-reserve/id/{restraunt_id}/from/website?banquet=1&lang=ru"
+                main = self.soup.select_one(".bookingBtn.mainBooking a")
+                if main:
+                    booking_links["main"] = (
+                        f"https://leclick.ru/restaurants/partner-reserve/id/"
+                        f"{restraunt_id}/from/website?lang=ru"
+                    )
+                banquet = self.soup.select_one('.bookingBtn a[href*="banquet=1"]')
+                if banquet:
+                    booking_links["banquet"] = (
+                        f"https://leclick.ru/restaurants/partner-reserve/id/"
+                        f"{restraunt_id}/from/website?banquet=1&lang=ru"
+                    )
             except Exception as e:
-                print(f"Error getting booking links: {str(e)}")
+                logger.warning(f"⚠️ Ошибка получения ссылок бронирования: {e}")
             return booking_links
 
         def get_deposit_rules(self):
             try:
-                deposit_rules = self.soup.select_one(
-                    ".depositRulesText pre"
-                ).text.strip()
-                return deposit_rules.replace("\n", " ")
+                return (
+                    self.soup.select_one(".depositRulesText pre")
+                    .text.strip()
+                    .replace("\n", " ")
+                )
             except AttributeError:
                 return None
 
         def get_visit_purposes(self):
             try:
-                purpose_block = (
+                block = (
                     self.soup.find("div", class_="importantInfo")
                     .find("span", string="Цель посещения:")
                     .find_parent("div", class_="items")
                 )
-
-                return [a.text.strip() for a in purpose_block.select("a")]
+                return [a.text.strip() for a in block.select("a")]
             except AttributeError:
                 return []
 
         def get_features(self):
             try:
-                features_block = (
+                block = (
                     self.soup.find("div", class_="importantInfo")
                     .find("span", string="Особенности:")
                     .find_parent("div", class_="items")
                 )
-
                 return [
                     a.text.strip()
-                    for a in features_block.select("a:not(.hidden)")
+                    for a in block.select("a:not(.hidden)")
                     if a.text.strip()
                 ]
             except AttributeError:
@@ -321,25 +287,40 @@ def parse_for_db():
             reviews = []
             try:
                 for review in self.soup.select(".feedback .item"):
-                    review_data = {
-                        "author": review.select_one(".name").text.strip(),
-                        "date": review.select_one(".date").text.strip(),
-                        "rating": len(review.select(".material-icons:not(.md-18)")),
-                        "text": review.select_one(".review").text.strip()
-                        if review.select_one(".review")
-                        else None,
-                        "source": review.select_one(".partner").text.strip()
-                        if review.select_one(".partner")
-                        else None,
-                    }
-                    reviews.append(review_data)
+                    reviews.append(
+                        {
+                            "author": review.select_one(".name").text.strip(),
+                            "date": review.select_one(".date").text.strip(),
+                            "rating": len(review.select(".material-icons:not(.md-18)")),
+                            "text": (
+                                review.select_one(".review").text.strip()
+                                if review.select_one(".review")
+                                else None
+                            ),
+                            "source": (
+                                review.select_one(".partner").text.strip()
+                                if review.select_one(".partner")
+                                else None
+                            ),
+                        }
+                    )
             except Exception as e:
-                print(f"Error parsing reviews: {str(e)}")
+                logger.warning(f"⚠️ Ошибка при разборе отзывов: {e}")
             return reviews
+
+        def get_full_description(self):
+            try:
+                return (
+                    self.soup.select_one("#allDescr")
+                    or self.soup.select_one("#shortDescr")
+                    or self.soup.select_one(".description .text")
+                ).text.strip()
+            except AttributeError:
+                return None
 
         def parse(self):
             names = self.get_names()
-            data = {
+            return {
                 "full_name": names["main"],
                 "alternate_name": names["alternate"],
                 "phone": self.get_phone(),
@@ -364,60 +345,37 @@ def parse_for_db():
                 "reviews": self.get_reviews(),
                 "description": self.get_full_description(),
             }
-            return data
-
-        def get_full_description(self):
-            try:
-                full_desc = self.soup.select_one("#allDescr")
-                if full_desc:
-                    return full_desc.text.strip()
-
-                short_desc = self.soup.select_one("#shortDescr")
-                if short_desc:
-                    return short_desc.text.strip()
-
-                return self.soup.select_one(".description .text").text.strip()
-            except AttributeError:
-                return None
 
     def main():
         start_time = time.time()
         start_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"Script started at: {start_dt}")
+        logger.info(f"📍 Скрипт запущен в {start_dt}")
 
         try:
-            with open(
-                "database/restaurants.txt", "r"
-            ) as f:  # restaurants test.txt for test, restaurants.txt for prod
+            with open("database/restaurants.txt", "r") as f:
                 urls = f.read().splitlines()
 
             results = []
-
             for url in urls:
                 try:
                     response = requests.get(url, timeout=15)
                     response.raise_for_status()
-
                     parser = RestaurantParser(response.text, url)
                     data = parser.parse()
-
                     data["source"] = {"url": url, "domain": urlparse(url).netloc}
-
                     results.append(data)
-
+                    print(".", end="", flush=True)  # 👈 минимальный print для прогресса
                 except Exception as e:
-                    print(f"\nError processing {url}: {str(e)}")
+                    logger.warning(f"\n⚠️ Ошибка при обработке {url}: {e}")
 
             with open("database/restaurants.json", "w", encoding="utf-8") as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
-            print(f"Fatal error: {str(e)}")
+            logger.error(f"❌ Фатальная ошибка: {e}")
 
-        # Тайминг выполнения
-        end_time = time.time()
-        elapsed = end_time - start_time
-        print(f"\nTotal execution time: {elapsed:.2f} seconds")
+        elapsed = time.time() - start_time
+        logger.info(f"⏱️ Время выполнения: {elapsed:.2f} сек")
 
     main()
 

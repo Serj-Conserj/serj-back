@@ -6,13 +6,12 @@ from fastapi import FastAPI
 from database.database import engine, Base
 from api.bookings import router as bookings_router
 from api.places import router as places_router
-from sqlalchemy import text
 from api.login import router as login_router
 from config import uvicorn_host
 from database.models import *
+from api.utils.logger import logger
 
 app = FastAPI()
-
 
 app.include_router(places_router, prefix="/api")
 app.include_router(bookings_router, prefix="/api")
@@ -29,10 +28,9 @@ async def startup():
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        print("✅ Таблицы успешно созданы.")
-
+        logger.info("✅ Таблицы успешно созданы.")
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        logger.error(f"❌ Ошибка при создании таблиц: {e}")
         raise
 
 

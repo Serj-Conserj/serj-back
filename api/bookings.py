@@ -22,26 +22,31 @@ from config import (
     booking_failure_state,
     booking_success_state,
 )
-
+from api.utils.logger import logger  # ✅ логгер
 
 router = APIRouter()
 
 
 async def put_into_queue(booking_id: UUID, available_online: bool):
-    conn = await connect_robust(rabbitmq_url)
-    channel = await conn.channel()
-    await channel.set_qos(prefetch_count=1)
-
     queue_name = PARS_QUEUE if available_online else CALL_QUEUE
+    logger.info(f"📤 Отправка booking_id={booking_id} в очередь {queue_name}")
 
-    await channel.declare_queue(queue_name, durable=True)
+    try:
+        conn = await connect_robust(rabbitmq_url)
+        channel = await conn.channel()
+        await channel.set_qos(prefetch_count=1)
+        await channel.declare_queue(queue_name, durable=True)
 
-    body = json.dumps({"booking_id": str(booking_id)})
-    await channel.default_exchange.publish(
-        Message(body.encode(), content_type="application/json"),
-        routing_key=queue_name,
-    )
-    await conn.close()
+        body = json.dumps({"booking_id": str(booking_id)})
+        await channel.default_exchange.publish(
+            Message(body.encode(), content_type="application/json"),
+            routing_key=queue_name,
+        )
+        await conn.close()
+        logger.info("✅ Успешно отправлено в очередь")
+    except Exception as e:
+        logger.error(f"❌ Ошибка при отправке в очередь: {e}")
+        raise
 
 
 class BookingCreate(BaseModel):
@@ -60,11 +65,13 @@ async def create_booking(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_member),
 ):
+    logger.info(f"📥 Новое бронирование от пользователя {current_user.id}")
 
     try:
         result = await db.execute(select(Place).where(Place.id == booking.place_id))
         place = result.scalars().first()
         if not place:
+            logger.warning(f"❗ Место не найдено: {booking.place_id}")
             raise HTTPException(status_code=404, detail="Place not found")
 
         db_booking = Booking(
@@ -80,6 +87,7 @@ async def create_booking(
         await db.commit()
         await db.refresh(db_booking)
 
+        logger.info(f"✅ Бронирование создано: {db_booking.id}")
         await put_into_queue(db_booking.id, place.available_online)
 
         return JSONResponse(
@@ -89,9 +97,11 @@ async def create_booking(
 
     except Exception as e:
         await db.rollback()
+        logger.error(f"❌ Ошибка при создании бронирования: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ----- Response Schemas -----
 class MemberResponse(BaseModel):
     id: uuid.UUID
     telegram_id: int
@@ -156,9 +166,11 @@ async def get_all_bookings(
     current_user=Depends(get_current_member),
 ):
     try:
+        logger.info(f"📄 Получение бронирований для пользователя {current_user.id}")
+
         stmt = (
             select(Booking)
-            .where(Booking.user_id == current_user.id)  # ← фильтрация по пользователю
+            .where(Booking.user_id == current_user.id)
             .options(
                 selectinload(Booking.member),
                 selectinload(Booking.place).options(
@@ -171,15 +183,11 @@ async def get_all_bookings(
         result = await db.execute(stmt)
         bookings = result.scalars().all()
 
-        upcoming_bookings = []
-        past_bookings = []
-        archived_bookings = []
-
         now = datetime.utcnow()
+        upcoming_bookings, past_bookings, archived_bookings = [], [], []
 
         for booking in bookings:
             serialized = BookingResponse.from_orm(booking).dict()
-
             if booking.booking_date < now:
                 archived_bookings.append(serialized)
             elif booking.confirmed:
@@ -187,6 +195,7 @@ async def get_all_bookings(
             else:
                 upcoming_bookings.append(serialized)
 
+        logger.info(f"✅ Найдено {len(bookings)} бронирований")
         return {
             "upcoming_bookings": upcoming_bookings,
             "past_bookings": past_bookings,
@@ -194,6 +203,7 @@ async def get_all_bookings(
         }
 
     except Exception as e:
+        logger.error(f"❌ Ошибка при получении бронирований: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -222,13 +232,12 @@ async def send_telegram_message(chat_id: str, text: str):
                 )
 
 
-@router.post(
-    "/bookings/update_status"
-)  # TODO сделать обращение внутри докера // разрешить только часть хостов
+@router.post("/bookings/update_status")
 async def update_booking_status(
     data: BookingStatusUpdate,
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info(f"🔄 Обновление статуса брони {data.booking_id} → {data.status}")
     try:
         result = await db.execute(
             select(Booking)
@@ -238,6 +247,7 @@ async def update_booking_status(
         booking = result.scalars().first()
 
         if not booking:
+            logger.warning(f"❗ Бронь не найдена: {data.booking_id}")
             raise HTTPException(status_code=404, detail="Booking not found")
 
         if data.status == booking_success_state:
@@ -254,6 +264,7 @@ async def update_booking_status(
                 "Попробуйте выбрать другое время или место."
             )
         else:
+            logger.warning("⚠️ Некорректный статус: %s", data.status)
             raise HTTPException(status_code=400, detail="Invalid status value")
 
         await db.commit()
@@ -261,8 +272,11 @@ async def update_booking_status(
 
         try:
             await send_telegram_message(booking.member.telegram_id, user_message)
+            logger.info(
+                f"📩 Уведомление отправлено Telegram ID {booking.member.telegram_id}"
+            )
         except Exception as e:
-            print(f"Message was not sent {e}")
+            logger.warning(f"⚠️ Ошибка отправки сообщения Telegram: {e}")
 
         return JSONResponse(
             status_code=200,
@@ -271,4 +285,5 @@ async def update_booking_status(
 
     except Exception as e:
         await db.rollback()
+        logger.error(f"❌ Ошибка обновления статуса бронирования: {e}")
         raise HTTPException(status_code=500, detail=str(e))
