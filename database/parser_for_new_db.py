@@ -319,65 +319,79 @@ def parse_for_db():
                 return None
 
         def parse(self):
-            names = self.get_names()
-            return {
-                "full_name": names["main"],
-                "alternate_name": names["alternate"],
-                "phone": self.get_phone(),
-                "address": self.get_address(),
-                "close_metro": self.get_metro(),
-                "type": self.get_type(),
-                "average_check": self.get_average_check(),
-                "main_cuisine": self.get_cuisines(),
-                "opening_hours": self.get_opening_hours(),
-                "menu_links": self.get_menu_links(),
-                "photos": self.get_photos(),
-                "coordinates": self.get_coordinates(),
-                "features": {
-                    "online_booking": "принимает"
-                    if "Забронировать" in self.soup.text
-                    else "не принимает"
-                },
-                "booking_links": self.get_booking_links(),
-                "deposit_rules": self.get_deposit_rules(),
-                "visit_purposes": self.get_visit_purposes(),
-                "features": self.get_features(),
-                "reviews": self.get_reviews(),
-                "description": self.get_full_description(),
-            }
+            try:
+                names = self.get_names()
+                full_name = names.get("main")
+                address = self.get_address()
 
-    def main():
-        start_time = time.time()
-        start_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logger.info(f"📍 Скрипт запущен в {start_dt}")
+                if not full_name or not address:
+                    logger.warning(f"⚠️ Пропуск ресторана: нет имени или адреса — {self.full_url}")
+                    return None
 
-        try:
-            with open("database/restaurants.txt", "r") as f:
-                urls = f.read().splitlines()
+                return {
+                    "full_name": full_name,
+                    "alternate_name": names.get("alternate", []),
+                    "phone": self.get_phone() or None,
+                    "address": address,
+                    "close_metro": self.get_metro() or [],
+                    "type": self.get_type() or None,
+                    "average_check": self.get_average_check() or None,
+                    "main_cuisine": self.get_cuisines() or [],
+                    "opening_hours": self.get_opening_hours() or {},
+                    "menu_links": self.get_menu_links() or {},
+                    "photos": self.get_photos() or {"interior": [], "food": [], "facade": []},
+                    "coordinates": self.get_coordinates() or None,
+                    "features": {
+                        "online_booking": "принимает"
+                        if "Забронировать" in self.soup.text
+                        else "не принимает"
+                    },
+                    "booking_links": self.get_booking_links() or {},
+                    "deposit_rules": self.get_deposit_rules() or None,
+                    "visit_purposes": self.get_visit_purposes() or [],
+                    "features": self.get_features() or [],
+                    "reviews": self.get_reviews() or [],
+                    "description": self.get_full_description() or None,
+                }
 
-            results = []
-            for url in urls:
-                try:
-                    response = requests.get(url, timeout=15)
-                    response.raise_for_status()
-                    parser = RestaurantParser(response.text, url)
-                    data = parser.parse()
-                    data["source"] = {"url": url, "domain": urlparse(url).netloc}
-                    results.append(data)
-                    print(".", end="", flush=True)  # 👈 минимальный print для прогресса
-                except Exception as e:
-                    logger.warning(f"\n⚠️ Ошибка при обработке {url}: {e}")
+            except Exception as e:
+                logger.warning(f"⚠️ Ошибка при парсинге {self.full_url}: {e}")
+                return None
 
-            with open("database/restaurants.json", "w", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False, indent=2)
 
-        except Exception as e:
-            logger.error(f"❌ Фатальная ошибка: {e}")
 
-        elapsed = time.time() - start_time
-        logger.info(f"⏱️ Время выполнения: {elapsed:.2f} сек")
+    start_time = time.time()
+    logger.info(f"📍 Скрипт запущен в {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    main()
+    try:
+        with open("database/restaurants.txt", "r") as f:
+            urls = f.read().splitlines()
+
+        results = []
+        for i, url in enumerate(urls, 1):
+            try:
+                response = requests.get(url, timeout=15)
+                response.raise_for_status()
+                parser = RestaurantParser(response.text, url)
+                data = parser.parse()
+                if data is None:
+                    logger.warning(f"\n⚠️ Парсинг {url} вернул None")
+                    continue
+                data["source"] = {"url": url, "domain": urlparse(url).netloc}
+                results.append(data)
+                print(f". {i}", end="", flush=True)
+            except Exception as e:
+                logger.warning(f"\n⚠️ Ошибка при обработке {url}: {e}")
+
+        with open("database/restaurants.json", "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+
+    except Exception as e:
+        logger.error(f"❌ Фатальная ошибка: {e}")
+
+    logger.info(f"⏱️ Время выполнения: {time.time() - start_time:.2f} сек")
+
+
 
 
 if __name__ == "__main__":

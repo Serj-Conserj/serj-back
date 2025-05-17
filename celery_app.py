@@ -15,7 +15,7 @@ celery_app.conf.enable_utc = False
 celery_app.conf.beat_schedule = {
     "parse-every-monday-4am": {
         "task": "tasks.parse_places_task",
-        "schedule": crontab(hour=4, minute=0, day_of_week=2),
+        "schedule": crontab(hour=13, minute=17, day_of_week=6),
     },
     "import-every-tuesday-4am": {
         "task": "tasks.import_places_task",
