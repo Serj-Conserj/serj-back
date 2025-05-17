@@ -241,7 +241,7 @@ async def update_booking_status(
     try:
         result = await db.execute(
             select(Booking)
-            .options(joinedload(Booking.member))
+            .options(joinedload(Booking.member), joinedload(Booking.place))
             .where(Booking.id == data.booking_id)
         )
         booking = result.scalars().first()
@@ -250,18 +250,25 @@ async def update_booking_status(
             logger.warning(f"❗ Бронь не найдена: {data.booking_id}")
             raise HTTPException(status_code=404, detail="Booking not found")
 
+        short_id = str(booking.id)[-4:]
+
         if data.status == booking_success_state:
             booking.confirmed = True
             user_message = (
-                f"✅ Успешно забронировали для вас место на {booking.booking_date.strftime('%d.%m.%Y %H:%M')}.\n"
-                f"Количество человек: {booking.num_of_people}.\n"
-                "Ждём вас! 🎉"
+                f"✅ Успешно забронировали для вас место!\n\n"
+                f"🏷 {booking.place.full_name}\n"
+                f"🗓 {booking.booking_date.strftime('%d.%m.%Y в %H:%M')}\n"
+                f"👥 {booking.num_of_people} чел.\n"
+                f"📍 {booking.place.address}\n"
+                f"🔢 Код брони: #{short_id}\n\n"
+                f"Ждём вас! 🎉"
             )
         elif data.status == booking_failure_state:
             booking.confirmed = False
             user_message = (
-                f"❌ К сожалению, мы не смогли забронировать для вас место на {booking.booking_date.strftime('%d.%m.%Y %H:%M')}.\n"
-                "Попробуйте выбрать другое время или место."
+                f"❌ К сожалению, не удалось забронировать для вас место в *{booking.place.full_name}* "
+                f"на {booking.booking_date.strftime('%d.%m.%Y в %H:%M')}.\n"
+                "Попробуйте другое время или место."
             )
         else:
             logger.warning("⚠️ Некорректный статус: %s", data.status)
@@ -271,10 +278,10 @@ async def update_booking_status(
         await db.refresh(booking)
 
         try:
-            await send_telegram_message(booking.member.telegram_id, user_message)
-            logger.info(
-                f"📩 Уведомление отправлено Telegram ID {booking.member.telegram_id}"
+            await send_telegram_message(
+                booking.member.telegram_id, user_message
             )
+            logger.info(f"📩 Уведомление отправлено Telegram ID {booking.member.telegram_id}")
         except Exception as e:
             logger.warning(f"⚠️ Ошибка отправки сообщения Telegram: {e}")
 
