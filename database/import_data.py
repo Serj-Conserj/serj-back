@@ -3,10 +3,11 @@ import os
 import asyncio
 import uuid
 import json
+import time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from sqlalchemy import select
 
+from sqlalchemy import select
 from database.models import (
     Place,
     AlternateName,
@@ -25,14 +26,14 @@ from api.utils.logger import logger
 import requests
 
 
+# ---------- LLM helper ----------------------------------------------------- #
 def generate_llm_reply(prompt: list[dict]) -> str:
+    """Запрос к Groq-LLM с отладкой ошибок."""
     url = "https://api.groq.com/openai/v1/chat/completions"
-
     headers = {
         "Authorization": f"Bearer {os.getenv('GROQ_TOKEN')}",
         "Content-Type": "application/json",
     }
-
     data = {
         "model": "llama3-70b-8192",
         "messages": prompt,
@@ -41,49 +42,41 @@ def generate_llm_reply(prompt: list[dict]) -> str:
         "top_p": 1,
         "stream": False,
     }
-
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"].strip()
-
+        content = response.json()["choices"][0]["message"]["content"].strip()
+        time.sleep(0.5)  # пауза между запросами к LLM
+        return content
     except requests.RequestException as e:
         logger.error(f"[ERROR] Request failed: {e}")
         raise RuntimeError(f"Ошибка при получении ответа от модели: {e}")
-
     except (KeyError, IndexError) as e:
         logger.error(f"[ERROR] Invalid response structure: {e}")
         raise RuntimeError(f"Ошибка обработки ответа от модели: {e}")
 
+
 def normalize_place_name(full_name: str, address: str) -> str:
+    """Получает короткое имя заведения через LLM."""
     prompt = [
-                        {
-                            "role": "user",
-                            "content": f"""
-                Ты — система нормализации названий заведений.
+        {
+            "role": "user",
+            "content": f"""
+Ты — система нормализации названий заведений.
 
-                Название: "{full_name}"
-                Адрес: "{address}"
+Название: "{full_name}"
+Адрес: "{address}"
 
-                Верни только одно строковое значение в формате:
-                <Короткое название> (ул. <название улицы>)
-
-                ❗️ Удали слова вроде "ресторан", "кафе", "бар", "пиццерия", спецсимволы и хештеги.  
-                ❗️ Название должно быть кратким.  
-                ❗️ Из адреса нужно выделить название улицы и подставить в скобки.  
-                ❗️ Никаких пояснений, только результат.
-
-                Пример:
-                Название: "Ресторан #Фарш на мясницкой"
-                Адрес: "Мясницкая улица д. 8"
-                Ответ: Фарш (ул. Мясницкая)
-                """.strip()
-                        }
-                    ]
-
+Верни только одно строковое значение в формате:
+<Короткое название> (ул. <название улицы>)
+""".strip(),
+        }
+    ]
     return generate_llm_reply(prompt)
 
-async def create_tables():
+
+# ---------- SQLAlchemy helpers -------------------------------------------- #
+async def create_tables() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("📦 Таблицы успешно созданы.")
@@ -91,10 +84,13 @@ async def create_tables():
 
 @asynccontextmanager
 async def get_async_session():
+    """
+    Контекст даёт сессию без авто-commit.
+    Rollback делается на ошибке, commit — вручную.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception as e:
             await session.rollback()
             logger.error(f"❌ Ошибка в сессии БД: {e}")
@@ -103,7 +99,11 @@ async def get_async_session():
             await session.close()
 
 
-async def import_from_json(filename: str):
+# ---------- Импорт --------------------------------------------------------- #
+BATCH_SIZE = 30  # сколько заведений фиксируем одним commit'ом
+
+
+async def import_from_json(filename: str) -> None:
     logger.info(f"📂 Начат импорт из файла: {filename}")
     await create_tables()
 
@@ -115,29 +115,30 @@ async def import_from_json(filename: str):
 
     async with get_async_session() as session:
         for place_data in data:
-            existing_place_result = await session.execute(
-                select(Place).where(
-                    Place.full_name == place_data["full_name"],
-                    Place.address == place_data["address"],
-                )
+            # пропускаем дубликаты
+            dup_q = select(Place).where(
+                Place.full_name == place_data["full_name"],
+                Place.address == place_data["address"],
             )
-            if existing_place_result.scalar():
+            if (await session.execute(dup_q)).scalar():
                 skipped += 1
-                logger.debug(f"↩️ Пропущено дубликат: {place_data['full_name']}")
+                logger.info(f"↩️ Пропущено дубликат: {place_data['full_name']}")
                 continue
 
+            # проверяем «главную» ссылку бронирования
             bl = place_data.get("booking_links", {})
-            if isinstance(bl, dict):
-                has_main = bool(bl.get("main"))
-            else:
-                has_main = any(item.get("type") == "main" for item in bl)
-            normalized_name = normalize_place_name(
-                    full_name=place_data["full_name"],
-                    address=place_data["address"]
-                )
+            has_main = (
+                bool(bl.get("main"))
+                if isinstance(bl, dict)
+                else any(link.get("type") == "main" for link in bl)
+            )
+
+            # создаём Place
             place = Place(
                 id=uuid.uuid4(),
-                full_name=normalized_name,
+                full_name=normalize_place_name(
+                    place_data["full_name"], place_data["address"]
+                ),
                 phone=place_data["phone"],
                 address=place_data["address"],
                 type=place_data["type"],
@@ -152,7 +153,7 @@ async def import_from_json(filename: str):
                     place_data["full_name"]
                     + " "
                     + place_data["address"]
-                    + " ".join(name for name in place_data.get("close_metro", ""))
+                    + " ".join(place_data.get("close_metro", ""))
                 )
                 .translate(
                     str.maketrans(
@@ -164,89 +165,113 @@ async def import_from_json(filename: str):
                 available_online=has_main,
             )
 
+            session.add(place)  # place должен быть в сессии сразу
+
+            # связи
             await process_relationships(session, place, place_data)
 
-            session.add(place)
             added += 1
-            logger.debug(f"✅ Добавлено заведение: {place.full_name}")
 
-        logger.info(f"🏁 Импорт завершён: добавлено {added}, пропущено {skipped}")
+            # commit каждые BATCH_SIZE объектов
+            if added % BATCH_SIZE == 0:
+                await session.commit()
+                logger.info(
+                    f"🚀 Добавлен батч из {BATCH_SIZE} заведений (всего: {added})"
+                )
+                await asyncio.sleep(10)
+
+        # финальный commit
+        await session.commit()
+        logger.info(f"✅ Импорт завершён: добавлено {added}, пропущено {skipped}")
 
 
-async def process_relationships(session, place, place_data):
-    for name in place_data["alternate_name"]:
-        result = await session.execute(
-            select(AlternateName).where(AlternateName.name == name)
-        )
-        alt_name = result.scalar()
-        if not alt_name:
-            alt_name = AlternateName(id=uuid.uuid4(), name=name)
-            session.add(alt_name)
-        place.alternate_names.append(alt_name)
+async def process_relationships(session, place: Place, place_data: dict) -> None:
+    """
+    Создаёт и привязывает связанные объекты.
+    Используем *синхронный* with session.no_autoflush, чтобы place успел попасть в сессию.
+    """
+    with session.no_autoflush:            # <-- FIX here
+        # alternate names
+        for name in place_data["alternate_name"]:
+            alt_name = (
+                await session.execute(select(AlternateName).where(AlternateName.name == name))
+            ).scalar()
+            if not alt_name:
+                alt_name = AlternateName(id=uuid.uuid4(), name=name)
+                session.add(alt_name)
+            place.alternate_names.append(alt_name)
 
-    for metro in place_data["close_metro"]:
-        result = await session.execute(
-            select(MetroStation).where(MetroStation.name == metro)
-        )
-        metro_obj = result.scalar()
-        if not metro_obj:
-            metro_obj = MetroStation(id=uuid.uuid4(), name=metro)
-            session.add(metro_obj)
-        place.metro_stations.append(metro_obj)
+        # metro
+        for metro in place_data["close_metro"]:
+            metro_obj = (
+                await session.execute(select(MetroStation).where(MetroStation.name == metro))
+            ).scalar()
+            if not metro_obj:
+                metro_obj = MetroStation(id=uuid.uuid4(), name=metro)
+                session.add(metro_obj)
+            place.metro_stations.append(metro_obj)
 
-    for cuisine in place_data["main_cuisine"]:
-        result = await session.execute(select(Cuisine).where(Cuisine.name == cuisine))
-        cuisine_obj = result.scalar()
-        if not cuisine_obj:
-            cuisine_obj = Cuisine(id=uuid.uuid4(), name=cuisine)
-            session.add(cuisine_obj)
-        place.cuisines.append(cuisine_obj)
+        # cuisine
+        for cuisine in place_data["main_cuisine"]:
+            cuisine_obj = (
+                await session.execute(select(Cuisine).where(Cuisine.name == cuisine))
+            ).scalar()
+            if not cuisine_obj:
+                cuisine_obj = Cuisine(id=uuid.uuid4(), name=cuisine)
+                session.add(cuisine_obj)
+            place.cuisines.append(cuisine_obj)
 
-    for feature in place_data["features"]:
-        result = await session.execute(select(Feature).where(Feature.name == feature))
-        feature_obj = result.scalar()
-        if not feature_obj:
-            feature_obj = Feature(id=uuid.uuid4(), name=feature)
-            session.add(feature_obj)
-        place.features.append(feature_obj)
+        # features
+        for feature in place_data["features"]:
+            feature_obj = (
+                await session.execute(select(Feature).where(Feature.name == feature))
+            ).scalar()
+            if not feature_obj:
+                feature_obj = Feature(id=uuid.uuid4(), name=feature)
+                session.add(feature_obj)
+            place.features.append(feature_obj)
 
-    for purpose in place_data["visit_purposes"]:
-        result = await session.execute(
-            select(VisitPurpose).where(VisitPurpose.name == purpose)
-        )
-        purpose_obj = result.scalar()
-        if not purpose_obj:
-            purpose_obj = VisitPurpose(id=uuid.uuid4(), name=purpose)
-            session.add(purpose_obj)
-        place.visit_purposes.append(purpose_obj)
+        # purposes
+        for purpose in place_data["visit_purposes"]:
+            purpose_obj = (
+                await session.execute(select(VisitPurpose).where(VisitPurpose.name == purpose))
+            ).scalar()
+            if not purpose_obj:
+                purpose_obj = VisitPurpose(id=uuid.uuid4(), name=purpose)
+                session.add(purpose_obj)
+            place.visit_purposes.append(purpose_obj)
 
-    for day, hours in place_data["opening_hours"].items():
-        place.opening_hours.append(OpeningHour(id=uuid.uuid4(), day=day, hours=hours))
+        # opening hours
+        for day, hours in place_data["opening_hours"].items():
+            place.opening_hours.append(OpeningHour(id=uuid.uuid4(), day=day, hours=hours))
 
-    for photo_type, urls in place_data["photos"].items():
-        for url in urls:
-            place.photos.append(Photo(id=uuid.uuid4(), type=photo_type, url=url))
+        # photos
+        for photo_type, urls in place_data["photos"].items():
+            for url in urls:
+                place.photos.append(Photo(id=uuid.uuid4(), type=photo_type, url=url))
 
-    for link_type, url in place_data["menu_links"].items():
-        place.menu_links.append(MenuLink(id=uuid.uuid4(), type=link_type, url=url))
+        # menu links
+        for link_type, url in place_data["menu_links"].items():
+            place.menu_links.append(MenuLink(id=uuid.uuid4(), type=link_type, url=url))
 
-    for link_type, url in place_data["booking_links"].items():
-        place.booking_links.append(
-            BookingLink(id=uuid.uuid4(), type=link_type, url=url)
-        )
+        # booking links
+        for link_type, url in place_data["booking_links"].items():
+            place.booking_links.append(BookingLink(id=uuid.uuid4(), type=link_type, url=url))
 
-    for review_data in place_data["reviews"]:
-        place.reviews.append(
-            Review(
-                id=uuid.uuid4(),
-                author=review_data["author"],
-                date=review_data["date"],
-                rating=review_data["rating"],
-                text=review_data["text"],
-                source=review_data.get("source"),
+        # reviews
+        for r in place_data["reviews"]:
+            place.reviews.append(
+                Review(
+                    id=uuid.uuid4(),
+                    author=r["author"],
+                    date=r["date"],
+                    rating=r["rating"],
+                    text=r["text"],
+                    source=r.get("source"),
+                )
             )
-        )
 
 
+# ---------- Запуск как скрипта -------------------------------------------- #
 if __name__ == "__main__":
     asyncio.run(import_from_json("database/restaurants.json"))
