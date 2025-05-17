@@ -8,7 +8,7 @@ from api.utils.logger import logger
 @celery_app.task
 def parse_places_task():
     logger.info("🛠️  Starting parse...")
-    asyncio.run(parse_for_db())
+    parse_for_db()
     logger.info("✅ Parsing done")
 
 

@@ -62,10 +62,12 @@ def normalize_place_name(full_name: str, address: str) -> str:
         {
             "role": "user",
             "content": f"""
+
 Ты — система нормализации названий заведений.
 
 Название: "{full_name}"
 Адрес: "{address}"
+
 
 Верни только одно строковое значение в формате:
 <Короткое название> (ул. <название улицы>)
@@ -75,8 +77,7 @@ def normalize_place_name(full_name: str, address: str) -> str:
     return generate_llm_reply(prompt)
 
 
-# ---------- SQLAlchemy helpers -------------------------------------------- #
-async def create_tables() -> None:
+async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("📦 Таблицы успешно созданы.")
@@ -127,13 +128,13 @@ async def import_from_json(filename: str) -> None:
 
             # проверяем «главную» ссылку бронирования
             bl = place_data.get("booking_links", {})
+
             has_main = (
                 bool(bl.get("main"))
                 if isinstance(bl, dict)
                 else any(link.get("type") == "main" for link in bl)
             )
 
-            # создаём Place
             place = Place(
                 id=uuid.uuid4(),
                 full_name=normalize_place_name(
@@ -190,11 +191,13 @@ async def process_relationships(session, place: Place, place_data: dict) -> None
     Создаёт и привязывает связанные объекты.
     Используем *синхронный* with session.no_autoflush, чтобы place успел попасть в сессию.
     """
-    with session.no_autoflush:            # <-- FIX here
+    with session.no_autoflush:  # <-- FIX here
         # alternate names
         for name in place_data["alternate_name"]:
             alt_name = (
-                await session.execute(select(AlternateName).where(AlternateName.name == name))
+                await session.execute(
+                    select(AlternateName).where(AlternateName.name == name)
+                )
             ).scalar()
             if not alt_name:
                 alt_name = AlternateName(id=uuid.uuid4(), name=name)
@@ -204,7 +207,9 @@ async def process_relationships(session, place: Place, place_data: dict) -> None
         # metro
         for metro in place_data["close_metro"]:
             metro_obj = (
-                await session.execute(select(MetroStation).where(MetroStation.name == metro))
+                await session.execute(
+                    select(MetroStation).where(MetroStation.name == metro)
+                )
             ).scalar()
             if not metro_obj:
                 metro_obj = MetroStation(id=uuid.uuid4(), name=metro)
@@ -234,7 +239,9 @@ async def process_relationships(session, place: Place, place_data: dict) -> None
         # purposes
         for purpose in place_data["visit_purposes"]:
             purpose_obj = (
-                await session.execute(select(VisitPurpose).where(VisitPurpose.name == purpose))
+                await session.execute(
+                    select(VisitPurpose).where(VisitPurpose.name == purpose)
+                )
             ).scalar()
             if not purpose_obj:
                 purpose_obj = VisitPurpose(id=uuid.uuid4(), name=purpose)
@@ -243,7 +250,9 @@ async def process_relationships(session, place: Place, place_data: dict) -> None
 
         # opening hours
         for day, hours in place_data["opening_hours"].items():
-            place.opening_hours.append(OpeningHour(id=uuid.uuid4(), day=day, hours=hours))
+            place.opening_hours.append(
+                OpeningHour(id=uuid.uuid4(), day=day, hours=hours)
+            )
 
         # photos
         for photo_type, urls in place_data["photos"].items():
@@ -256,7 +265,9 @@ async def process_relationships(session, place: Place, place_data: dict) -> None
 
         # booking links
         for link_type, url in place_data["booking_links"].items():
-            place.booking_links.append(BookingLink(id=uuid.uuid4(), type=link_type, url=url))
+            place.booking_links.append(
+                BookingLink(id=uuid.uuid4(), type=link_type, url=url)
+            )
 
         # reviews
         for r in place_data["reviews"]:
