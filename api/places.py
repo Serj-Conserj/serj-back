@@ -31,11 +31,17 @@ async def get_places(
     name: Optional[str] = None,
     limit: int = Query(5, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    similarity_threshold: float = Query(0, ge=0.0, le=1.0),
+    similarity_threshold: float = Query(0.3, ge=0.0, le=1.0),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Возвращает список заведений.
 
-    stmt = select(PlaceModel).options(
+    * Если передан `name`, сначала ищем полным-текстовым поиском (FTS),
+      а при недостатке результатов – догружаем по trigram-similarity.
+    * Дубликаты по `id` всегда убираются.
+    """
+    stmt_base = select(PlaceModel).options(
         selectinload(PlaceModel.cuisines),
         selectinload(PlaceModel.metro_stations),
         selectinload(PlaceModel.alternate_names),
@@ -48,9 +54,13 @@ async def get_places(
         selectinload(PlaceModel.reviews),
     )
 
+    # ------------------------------------------------------------------
+    # Поиск по имени
+    # ------------------------------------------------------------------
     if name:
         logger.info(f"🔎 Поиск по имени: '{name}'")
 
+        # Приводим к кириллице (simple latin->cyr mapping), затем в lower-case
         processed_name = name.translate(
             str.maketrans(
                 "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -58,29 +68,53 @@ async def get_places(
             )
         ).lower()
 
-        stmt_fts = stmt.where(
+        # ---------- FTS ----------
+        stmt_fts = stmt_base.where(
             text(
-                "to_tsvector('russian', search_text) @@ plainto_tsquery('russian', :query)"
+                "to_tsvector('russian', search_text) "
+                "@@ plainto_tsquery('russian', :query)"
             )
         ).params(query=processed_name)
 
-        result_fts = await db.execute(stmt_fts.limit(limit))
-        places_fts = result_fts.scalars().all()
+        fts_res = await db.execute(stmt_fts.limit(limit))
+        places_fts = fts_res.scalars().all()
         logger.info(f"🔠 Найдено по FTS: {len(places_fts)}")
 
+        # ---------- similarity ----------
         if len(places_fts) < limit // 2:
-            stmt_similar = stmt.where(
-                func.similarity(PlaceModel.search_text, name) > similarity_threshold
-            ).order_by(func.similarity(PlaceModel.search_text, name).desc())
-            result_similar = await db.execute(stmt_similar.limit(limit))
-            places_similar = result_similar.scalars().all()
+            ids_fts = [p.id for p in places_fts]
+            stmt_sim = (
+                stmt_base.where(
+                    func.similarity(PlaceModel.search_text, name)
+                    > similarity_threshold,
+                    PlaceModel.id.notin_(ids_fts),  # убираем дубли на уровне SQL
+                )
+                .order_by(func.similarity(PlaceModel.search_text, name).desc())
+                .limit(limit)
+            )
+            sim_res = await db.execute(stmt_sim)
+            places_similar = sim_res.scalars().all()
             logger.info(f"🧩 Найдено по similarity: {len(places_similar)}")
-            return places_fts + places_similar[: limit - len(places_fts)]
 
-        return places_fts
+            combined = places_fts + places_similar
+        else:
+            combined = places_fts
 
-    stmt = stmt.order_by(PlaceModel.full_name).offset(offset).limit(limit)
-    result = await db.execute(stmt)
-    results = result.scalars().all()
-    logger.info(f"📄 Всего заведений без фильтрации: {len(results)}")
-    return results
+        # ---------- финальная дедупликация ----------
+        unique: list[PlaceModel] = []
+        seen: set[UUID] = set()
+        for place in combined:
+            if place.id not in seen:
+                seen.add(place.id)
+                unique.append(place)
+
+        return unique[:limit]
+
+    # ------------------------------------------------------------------
+    # Без имени: постраничная выдача
+    # ------------------------------------------------------------------
+    stmt_default = stmt_base.order_by(PlaceModel.full_name).offset(offset).limit(limit)
+    result = await db.execute(stmt_default)
+    rows = result.scalars().all()
+    logger.info(f"📄 Всего заведений без фильтрации: {len(rows)}")
+    return rows

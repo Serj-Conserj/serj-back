@@ -55,11 +55,12 @@ def generate_llm_reply(prompt: list[dict]) -> str:
         logger.error(f"[ERROR] Invalid response structure: {e}")
         raise RuntimeError(f"Ошибка обработки ответа от модели: {e}")
 
+
 def normalize_place_name(full_name: str, address: str) -> str:
     prompt = [
-                        {
-                            "role": "user",
-                            "content": f"""
+        {
+            "role": "user",
+            "content": f"""
                 Ты — система нормализации названий заведений.
 
                 Название: "{full_name}"
@@ -77,11 +78,12 @@ def normalize_place_name(full_name: str, address: str) -> str:
                 Название: "Ресторан #Фарш на мясницкой"
                 Адрес: "Мясницкая улица д. 8"
                 Ответ: Фарш (ул. Мясницкая)
-                """.strip()
-                        }
-                    ]
+                """.strip(),
+        }
+    ]
 
     return generate_llm_reply(prompt)
+
 
 async def create_tables():
     async with engine.begin() as conn:
@@ -132,9 +134,8 @@ async def import_from_json(filename: str):
             else:
                 has_main = any(item.get("type") == "main" for item in bl)
             normalized_name = normalize_place_name(
-                    full_name=place_data["full_name"],
-                    address=place_data["address"]
-                )
+                full_name=place_data["full_name"], address=place_data["address"]
+            )
             place = Place(
                 id=uuid.uuid4(),
                 full_name=normalized_name,
