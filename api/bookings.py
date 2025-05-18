@@ -6,13 +6,13 @@ from typing import Optional, Union, List
 from uuid import UUID
 from datetime import datetime
 import uuid
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, and_
 from sqlalchemy.orm import selectinload, joinedload
 from aio_pika import connect_robust, Message
 import json
 
 from database.database import get_db, AsyncSession
-from database.models import Booking, Place, Member, Cuisine, MetroStation
+from database.models import Booking, Place, Member, Cuisine, MetroStation, place_cuisines, place_metro_stations
 from api.utils.auth_tools import get_current_member
 from config import (
     rabbitmq_url,
@@ -222,56 +222,62 @@ async def send_telegram_message(chat_id: str, text: str):
                 )
 
 async def get_similar_places(place_id: UUID, db: AsyncSession, limit: int = 5) -> List[Place]:
-    """
-    Возвращает похожие заведения по следующим критериям:
-    - Совпадающие кухни
-    - Совпадающие станции метро
-    - Такой же тип заведения
-    - Аналогичный средний чек
-    """
-    # Получаем исходное заведение
-    result = await db.execute(
+    # Получаем исходное заведение с связанными данными
+    place_query = (
         select(Place)
         .options(
             selectinload(Place.cuisines),
-            selectinload(Place.metro_stations),
-            selectinload(Place.features)
+            selectinload(Place.metro_stations)
         )
         .where(Place.id == place_id)
     )
-    original_place = result.scalars().first()
+    original_place = (await db.execute(place_query)).scalars().first()
     
     if not original_place:
         return []
 
-    # Собираем параметры для поиска
-    cuisine_ids = [c.id for c in original_place.cuisines]
-    metro_ids = [m.id for m in original_place.metro_stations]
-    place_type = original_place.type
-    average_check = original_place.average_check
-
-    # Ищем похожие заведения
+    # Формируем условия для похожих заведений
+    conditions = []
+    
+    # Условие по кухням
+    if original_place.cuisines:
+        cuisine_ids = [c.id for c in original_place.cuisines]
+        cuisine_condition = Place.cuisines.any(Cuisine.id.in_(cuisine_ids))
+        conditions.append(cuisine_condition)
+    
+    # Условие по метро
+    if original_place.metro_stations:
+        metro_ids = [m.id for m in original_place.metro_stations]
+        metro_condition = Place.metro_stations.any(MetroStation.id.in_(metro_ids))
+        conditions.append(metro_condition)
+    
+    # Условие по типу заведения
+    if original_place.type:
+        conditions.append(Place.type == original_place.type)
+    
+    # Основной запрос
     query = (
         select(Place)
         .options(
             selectinload(Place.cuisines),
             selectinload(Place.metro_stations)
+        )
         .where(
-            Place.id != original_place.id,
-            or_(
-                Place.cuisines.any(Cuisine.id.in_(cuisine_ids)),
-                Place.metro_stations.any(MetroStation.id.in_(metro_ids)),
-                Place.type == place_type
+            and_(
+                Place.id != original_place.id,
+                or_(*conditions) if conditions else True
             )
         )
-        .order_by(
-            Place.average_check.desc() if average_check == "high" 
-            else Place.average_check.asc()
-        )
-        .limit(limit)
-    ))
-
-    result = await db.execute(query)
+    )
+    
+    # Сортировка по среднему чеку
+    if original_place.average_check == "high":
+        query = query.order_by(Place.average_check.desc())
+    else:
+        query = query.order_by(Place.average_check.asc())
+    
+    # Выполняем запрос
+    result = await db.execute(query.limit(limit))
     return result.scalars().all()
 
 @router.post(
@@ -321,7 +327,7 @@ async def update_booking_status(
 
         return JSONResponse(
             status_code=200,
-            content={"status": "success", "message": "Booking status updated"},
+            content=user_message,
         )
 
     except Exception as e:
