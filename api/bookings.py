@@ -192,7 +192,7 @@ async def get_all_bookings(
             serialized = BookingResponse.from_orm(booking).dict()
             if booking.booking_date < now:
                 archived_bookings.append(serialized)
-            elif booking.status == 1:
+            elif booking.status != 0:
                 past_bookings.append(serialized)
             else:
                 upcoming_bookings.append(serialized)
