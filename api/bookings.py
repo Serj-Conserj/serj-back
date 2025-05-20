@@ -266,7 +266,7 @@ async def update_booking_status(
         elif data.status == booking_failure_state:
             booking.confirmed = False
             user_message = (
-                f"❌ К сожалению, не удалось забронировать для вас место в *{booking.place.full_name}* "
+                f"❌ К сожалению, не удалось забронировать для вас место в {booking.place.full_name}"
                 f"на {booking.booking_date.strftime('%d.%m.%Y в %H:%M')}.\n"
                 "Попробуйте другое время или место."
             )
