@@ -81,6 +81,7 @@ async def create_booking(
             booking_date=booking.booking_date,
             num_of_people=booking.num_of_people,
             special_requests=booking.special_requests,
+            status=0,
         )
 
         db.add(db_booking)
@@ -151,7 +152,8 @@ class BookingResponse(BaseModel):
     recording_date: datetime
     num_of_people: int
     special_requests: Optional[str]
-    confirmed: bool
+    # confirmed: bool
+    status: int
     member: MemberResponse
     place: PlaceResponse
 
@@ -190,7 +192,7 @@ async def get_all_bookings(
             serialized = BookingResponse.from_orm(booking).dict()
             if booking.booking_date < now:
                 archived_bookings.append(serialized)
-            elif booking.confirmed:
+            elif booking.staus == 0:
                 past_bookings.append(serialized)
             else:
                 upcoming_bookings.append(serialized)
@@ -253,7 +255,7 @@ async def update_booking_status(
         short_id = str(booking.id)[-4:]
 
         if data.status == booking_success_state:
-            booking.confirmed = True
+            booking.status = 1
             user_message = (
                 f"✅ Успешно забронировали для вас место!\n\n"
                 f"🏷 {booking.place.full_name}\n"
@@ -264,7 +266,7 @@ async def update_booking_status(
                 f"Ждём вас! 🎉"
             )
         elif data.status == booking_failure_state:
-            booking.confirmed = False
+            booking.status = 2
             user_message = (
                 f"❌ К сожалению, не удалось забронировать для вас место в {booking.place.full_name}"
                 f"на {booking.booking_date.strftime('%d.%m.%Y в %H:%M')}.\n"

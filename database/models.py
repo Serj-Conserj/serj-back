@@ -43,7 +43,8 @@ class Booking(Base):
     recording_date = Column(DateTime, server_default=func.now())
     num_of_people = Column(Integer)
     special_requests = Column(String)
-    confirmed = Column(Boolean, default=False)
+    # confirmed = Column(Boolean, default=False)
+    status = Column(Integer) # 0 - в работе 1 - подтверждено 2 - отмена
 
     member = relationship("Member")
     place = relationship("Place")
