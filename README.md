@@ -1,82 +1,64 @@
-# Conserj.ru – AI-Based Restaurant Reservation Service
+# Conserj.ru: AI-powered Table Reservation Service
 
-## Overview
-
-Conserj.ru is a smart concierge system for booking tables in Moscow restaurants. It combines Telegram authentication, automated voice booking via SIP, online API integrations, Prometheus monitoring, ClickHouse analytics, and a hybrid task queue powered by RabbitMQ.
+Conserj.ru is an intelligent online booking platform that allows users to reserve tables in Moscow restaurants seamlessly through a combination of web interface, Telegram bot integration, and AI-powered phone calls. The system minimizes user input, automates the booking process, and provides real-time updates.
 
 ## Features
 
-* **Web + Telegram Web App** interface
-* **Fast restaurant search** with filters (location, cuisine, price)
-* **Booking via API** (if supported by restaurant)
-* **Booking via automated call** (if no API)
-* **AI voice model for call handling**
-* **Metrics tracking** via Prometheus
-* **Analytics dashboard** via Grafana + ClickHouse
+* **Smart Booking Engine**: Uses both online APIs and AI-driven phone calls to place reservations.
+* **Telegram Bot Authentication**: Quick user login and data collection via Telegram.
+* **Fast Booking Interface**: Minimal UI allows booking in under a minute.
+* **Hybrid Booking Workflow**: Automatically chooses the best method (API or call) for each restaurant.
+* **Admin Dashboard**: Monitor bookings, manage restaurants, and analyze usage.
 
-## Tech Stack
+## Technologies Used
 
-* **Backend**: FastAPI
+* **Backend**: FastAPI (Python)
 * **Database**: PostgreSQL
-* **Asynchronous Tasks**: Celery + RabbitMQ
-* **Voice Calls**: SIP + TTS/ASR/LLM
-* **Monitoring**: Prometheus + Grafana
-* **Analytics**: ClickHouse cluster
-* **CI/CD**: Drone CI
-* **Auth**: Telegram Login
-* **DevOps**: Docker Compose, Consul, Zookeeper
+* **Task Queues**: RabbitMQ
+* **Scheduled Jobs**: Celery
+* **Voice Call Handling**: SIP + AI for speech processing
+* **Infrastructure**: Docker + Drone CI for deployments
 
-## System Architecture
+## Architecture
 
-* PostgreSQL stores users, restaurants, and booking data.
-* RabbitMQ has two queues: `Online` (API bookings) and `Calling` (SIP phone bot).
-* ClickHouse stores real-time metrics and events.
-* Prometheus collects metrics (saves, updates, errors) and exposes on port 84.
-* Grafana reads from ClickHouse to visualize performance.
-* Consul handles service discovery and leader election.
+* **Microservice-based**
+* **Booking Requests** are routed via RabbitMQ to either:
 
-## Folder Structure
+  * Online integration handler (if API is available)
+  * SIP-based AI call handler (if no integration exists)
+* **Periodic Updaters** using Celery keep restaurant data current
+* **Prometheus + Grafana** monitor system health and performance
 
-```
-.
-├── clickhouse/          # Cluster config and node setup
-├── grafana/             # Dashboards, datasources, provisioning
-├── microservice/        # Event simulation logic, ClickHouse writes
-├── prometheus/          # Config + persistent volume
-├── docker-compose.yml   # Main orchestration file
-```
+## Setup
 
-## Getting Started
-
-### 1. Launch All Services
+To run the system locally:
 
 ```bash
+git clone https://github.com/Serj-Conserj/serj-back.git
+cd serj-back
 docker compose up --build
 ```
 
-### 2. Access Interfaces
+Ensure the following directories are mounted correctly for config, data, and provisioning.
 
-* **Grafana**: [http://localhost:3000](http://localhost:3000) (admin / admin123)
-* **Prometheus**: [http://localhost:9090](http://localhost:9090)
-* **ClickHouse (Web UI)**: [http://localhost:8124](http://localhost:8124) (user/pass: default)
-* **Consul UI**: [http://localhost:8500](http://localhost:8500)
+## Telegram Bot Flow
 
-### 3. View Metrics
+1. User visits [https://conserj.ru](https://conserj.ru)
+2. Redirect to Telegram Bot for login
+3. Telegram provides name, phone — stored automatically
+4. Booking made with zero form-filling from user
 
-* Run the event simulator (`microservice/`) to stream synthetic data.
-* Metrics are exposed at `http://localhost:84/metrics`
-* Use prebuilt Grafana dashboards for visualization.
+## AI Calling Workflow
 
-## Contributors
+1. System initiates SIP call with reservation details
+2. Records response, sends to ML model for interpretation
+3. Model processes and responds via voice if needed
+4. Result recorded and user is notified via bot/website
 
-* Sergey Budygin – Backend, ClickHouse, Prometheus, Docker, GitOps
-* Pavel Sardak – Data scraping, PostgreSQL model design
-* Maxim Kuptsov – Frontend, UI/UX, Telegram Web App integration
+## Project Status
 
-## License
+The project is actively developed as part of a HSE Bachelor's programme and participated in MTS TrueTech Hack and VK Education Summer School. It combines real-time systems, NLP, and user-centric design for solving a real-world problem.
 
-MIT (or academic use only – project for HSE Bachelor in DSBA)
+## Demo
 
----
-
-> This project was created as part of the 2nd year Software Team Project course at the Higher School of Economics, Faculty of Computer Science.
+Live at [https://conserj.ru](https://conserj.ru)
