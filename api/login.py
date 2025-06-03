@@ -14,7 +14,7 @@ from api.utils.auth_tools import (
     validate_web_app_data,
 )
 from api.utils.schemas import TelegramAuth, RefreshRequest
-from api.utils.logger import logger  # ✅ логгер
+from api.utils.logger import logger 
 
 router = APIRouter()
 
